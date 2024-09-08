@@ -16,10 +16,9 @@ export class CompanyService {
 		@InjectConnection() private readonly connection: mongoose.Connection,
 	) { }
 
-	async addCompany(payload: AddCompanyDto): Promise<CompanyDocument | any> {
-		const { user } = payload;
+	async addCompany(payload: AddCompanyDto): Promise<CompanyDocument> {
 
-		console.log(payload);
+		const { user } = payload;
 
 		// Start a session
 		const session = await this.connection.startSession();
@@ -87,7 +86,7 @@ export class CompanyService {
 			await session.commitTransaction();
 			session.endSession();
 
-			// return savedCompany;
+			return savedCompany;
 		}
 		catch (error) {
 			// Abort the transaction in case of an error

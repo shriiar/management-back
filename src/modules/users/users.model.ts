@@ -31,7 +31,7 @@ export class User {
 
 	@Prop({
 		required: true,
-		select: false, // TODO: uncomment this and handle password select in auth service
+		select: false,
 	})
 	password: string;
 
