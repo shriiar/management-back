@@ -8,8 +8,7 @@ import { Model } from 'mongoose';
 export class AdminService {
 
 	constructor(
-		@InjectModel(User.name)
-		private readonly userModel: Model<User>,
+		@InjectModel(User.name) private readonly userModel: Model<User>,
 	) { }
 
 	async adduser(payload: AddUserDto) {

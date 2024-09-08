@@ -1,6 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
-import * as bcrypt from 'bcrypt';
 import { User } from '../users/users.model';
 
 export type CompanyDocument = Company & Document;
@@ -20,7 +19,10 @@ export class Company {
 	@Prop({ required: true, unique: true, trim: true, lowercase: true })
 	email: string;
 
-	@Prop({ required: true, default: null })
+	@Prop({ type: String, required: true })
+	address: string;
+
+	@Prop({ type: Number, required: true })
 	allowedUnits: number;
 
 	@Prop({
@@ -38,4 +40,4 @@ export class Company {
 	updatedAt: Date;
 }
 
-export const UserSchema = SchemaFactory.createForClass(User);
+export const CompanySchema = SchemaFactory.createForClass(Company);

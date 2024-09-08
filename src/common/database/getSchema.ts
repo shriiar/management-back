@@ -1,4 +1,5 @@
 import { ModelDefinition } from "@nestjs/mongoose";
+import { Company, CompanySchema } from "src/modules/company/company.model";
 import { User, UserSchema } from "src/modules/users/users.model";
 
 const models = {
@@ -6,6 +7,11 @@ const models = {
 		name: User.name,
 		schema: UserSchema,
 	},
+
+	'Company': {
+		name: Company.name,
+		schema: CompanySchema 
+	}
 }
 
 export const getAllSchema = (): ModelDefinition[] => {

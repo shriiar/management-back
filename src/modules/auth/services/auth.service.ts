@@ -18,8 +18,6 @@ export class AuthService {
 		email = email?.toLowerCase();
 		const user = await this.userModel.findOne({ email }).select("+password");
 
-		console.log(user);
-
 		if (!user) {
 			throw new NotFoundException(AUTH_ERROR_MESSAGES.LOGIN.USER_NOT_FOUND, { cause: AUTH_ERROR_CAUSE.USER_NOT_FOUND });
 		}

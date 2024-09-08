@@ -9,13 +9,13 @@ export class RolesGuard implements CanActivate {
 	constructor(private reflector: Reflector, private userService: UsersService) { }
 
 	async canActivate(context: ExecutionContext): Promise<boolean> {
+		
 		const roles = this.reflector.get<string[]>('roles', context.getHandler());
 		const request = context.switchToHttp().getRequest();
+
 		if (request?.user) {
 			const { _id } = request.user;
 			const user = await this.userService.findFullUserById(_id);
-
-			console.log(user);
 
 			if (!user) {
 				throw new NotFoundException("User not found");
