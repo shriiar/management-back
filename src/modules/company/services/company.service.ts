@@ -16,8 +16,10 @@ export class CompanyService {
 		@InjectConnection() private readonly connection: mongoose.Connection,
 	) { }
 
-	async addCompany(payload: AddCompanyDto): Promise<CompanyDocument> {
+	async addCompany(payload: AddCompanyDto): Promise<CompanyDocument | any> {
 		const { user } = payload;
+
+		console.log(payload);
 
 		// Start a session
 		const session = await this.connection.startSession();
@@ -63,7 +65,7 @@ export class CompanyService {
 				password: user.password,
 				role: USER_ROLE.admin,
 			});
-			const savedUser = await newUser.save({ session });
+			const savedUser: any = await newUser.save({ session });
 
 			// Now add company & associate user (admin) to the company
 			const newCompany = new this.companyModel({
@@ -72,15 +74,20 @@ export class CompanyService {
 				address: payload.address,
 				allowedUnits: payload.allowedUnits,
 				imageUrl: payload.imageUrl,
-				user: savedUser._id,
+				admin: savedUser._id,
+				users: [savedUser._id],
 			});
 			const savedCompany = await newCompany.save({ session });
+
+			// updating savedUser with the company reference
+			savedUser.company = new mongoose.Types.ObjectId(savedCompany._id);
+			await savedUser.save({ session });
 
 			// Commit the transaction
 			await session.commitTransaction();
 			session.endSession();
 
-			return savedCompany;
+			// return savedCompany;
 		}
 		catch (error) {
 			// Abort the transaction in case of an error

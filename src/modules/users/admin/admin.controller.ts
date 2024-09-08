@@ -11,8 +11,8 @@ import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 @ApiTags('Admin')
 @ApiBearerAuth()
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(USER_ROLE.admin)
+// @UseGuards(JwtAuthGuard, RolesGuard)
+// @Roles(USER_ROLE.admin)
 export class AdminController {
 
 	constructor(
@@ -21,7 +21,7 @@ export class AdminController {
 
 	@Post('add-user')
 	@ApiBody({ type: AddUserDto })
-	@ResponseMessage("Company added successfully")
+	@ResponseMessage("User added successfully")
 	async addCompany(
 		@Body() body: AddUserDto
 	) {

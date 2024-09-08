@@ -18,13 +18,13 @@ export class AddUserDto {
 	@IsString({ message: 'Role must be a string' })
 	role: 'manager' | 'accountant' | 'admin';
 
-	@ApiProperty({ example: 'Aa123456', required: true })
-	@IsString({ message: 'Password must be a string' })
-	@IsNotEmpty({ message: 'Password is required' })
-	@MinLength(6, { message: 'Password must be at least 6 characters long' })
-	@MaxLength(20, { message: 'Password must be at most 20 characters long' })
-	@IsStrongPassword({ minUppercase: 1, minNumbers: 1, minLowercase: 1, minLength: 6, minSymbols: 0 }, { message: 'Password must be at least 6 characters long and contain at least one uppercase letter, one lowercase letter and one number' })
-	password: string;
+    @ApiProperty({ example: 'Aa123456', required: true })
+    @IsString({ message: 'Password must be a string' })
+    @IsNotEmpty({ message: 'Password is required' })
+    @MinLength(6, {message: 'Password must be at least 6 characters long'})
+    @MaxLength(20, {message: 'Password must be at most 20 characters long'})
+    @IsStrongPassword({minUppercase: 1, minNumbers:1, minLowercase:1, minLength:6, minSymbols:0}, {message: 'Password must be at least 6 characters long and contain at least one uppercase letter, one lowercase letter and one number'})
+    password: string;
 
 	@ApiProperty({ example: 'https://lh3.googleusercontent.com/a/ACg8ocL6ENaRyKehVXK-br8c4HYs3ZIPS6ONCA5s191YGEC5=s96-c' })
 	@IsString({ message: 'Image url must be a string' })

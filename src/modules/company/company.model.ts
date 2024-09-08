@@ -31,7 +31,16 @@ export class Company {
 		ref: 'User',
 		type: mongoose.Schema.Types.ObjectId,
 	})
-	user: User;
+	admin: User;
+
+	@Prop({ required: false, default: [] })
+	users: [];
+
+	@Prop({ required: false, default: [] })
+	properties: [];
+
+	@Prop({ required: false, default: [] })
+	units: [];
 
 	@Prop({ required: false, default: null })
 	imageUrl?: string;
