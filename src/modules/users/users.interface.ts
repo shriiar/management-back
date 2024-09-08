@@ -7,6 +7,9 @@ export interface IUser {
 	email: string;
 	password: string;
 
+	// mongo id
+	company?: string;
+
 	// booleans
 	isVerified?: boolean;
 	isBlocked?: boolean;
@@ -27,6 +30,9 @@ export interface IFullUser extends IUser {
 	isVerified: boolean;
 	isBlocked: boolean;
 	isDeleted: boolean;
+
+	// mongo id
+	company: string;
 
 	settings: IUserSettings;
 

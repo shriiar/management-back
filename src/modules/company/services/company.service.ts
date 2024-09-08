@@ -6,6 +6,7 @@ import { Company, CompanyDocument } from '../company.model';
 import { User } from 'src/modules/users/users.model';
 import { USER_ROLE } from 'src/modules/users/users.constant';
 import { COLLECTIONS } from 'src/common/config/consts';
+import { IFullUser } from 'src/modules/users/users.interface';
 
 @Injectable()
 export class CompanyService {
@@ -15,6 +16,10 @@ export class CompanyService {
 		@InjectModel(User.name) private readonly userModel: Model<User>,
 		@InjectConnection() private readonly connection: mongoose.Connection,
 	) { }
+
+	async getCompany(user: IFullUser) {
+		return await this.companyModel.findById(user.company).exec();
+	}
 
 	async addCompany(payload: AddCompanyDto): Promise<CompanyDocument> {
 
