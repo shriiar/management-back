@@ -18,7 +18,6 @@ export class UnitService {
 		@InjectConnection() private readonly connection: mongoose.Connection,
 	) { }
 
-
 	async addUnit(payload: AddUnitDto, user: IFullUser) {
 
 		// Start a session
