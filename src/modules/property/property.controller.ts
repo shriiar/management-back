@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { USER_ROLE } from '../users/users.constant';
@@ -34,10 +34,18 @@ export class PropertyController {
 		@Query('occupiedUnits') occupiedUnits: number,
 		@CurrentUser() user: IFullUser
 	) {
-
 		const filter = { name, address, unitsCount, occupiedUnits }
-
 		return await this.propertyService.getPartialProperties(filter, user);
+	}
+
+	@Get('get-property/:property')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.admin, USER_ROLE.manager, USER_ROLE.accountant)
+	async getProperty(
+		@Param('property') property: string,
+		@CurrentUser() user: IFullUser
+	) {
+		return await this.propertyService.getProperty(property, user);
 	}
 
 	@Post('add-property')

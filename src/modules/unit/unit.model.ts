@@ -33,7 +33,7 @@ export class Unit {
 	expensePerMonth: [];
 
 	@Prop({ required: false, default: false })
-	isOccupied: string;
+	isOccupied: boolean;
 
 	@Prop({
 		required: false,

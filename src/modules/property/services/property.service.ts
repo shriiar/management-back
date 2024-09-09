@@ -6,6 +6,7 @@ import { Company } from 'src/modules/company/company.model';
 import { Property, PropertyDocument } from '../property.model';
 import { IFullUser } from 'src/modules/users/users.interface';
 import { CompanyService } from 'src/modules/company/services/company.service';
+import { COLLECTIONS } from 'src/common/config/consts';
 
 @Injectable()
 export class PropertyService {
@@ -16,7 +17,8 @@ export class PropertyService {
 		@InjectConnection() private readonly connection: mongoose.Connection,
 	) { }
 
-	public async getPartialProperties(filter: propertyFilter, user: IFullUser) {
+	// gets partial property data with filtering
+	async getPartialProperties(filter: propertyFilter, user: IFullUser) {
 
 		const { name, address, unitsCount, occupiedUnits } = filter;
 
@@ -55,6 +57,63 @@ export class PropertyService {
 				},
 			},
 		]).exec();
+	}
+
+	// gets a property and associated units to the property
+	async getProperty(property: string, user: IFullUser) {
+		
+		return this.propertyModel.aggregate([
+
+			// match property and user company
+			{
+				$match: {
+					"_id": new mongoose.Types.ObjectId(property),
+					"company": user?.company
+				}
+			},
+
+			// lookup to get associated units
+			{
+				$lookup: {
+					from: COLLECTIONS.units,
+					localField: "units",
+					foreignField: "_id",
+					as: "unit"
+				}
+			},
+
+			// sorting units by createdAt within the array without unwinding
+			{
+				$addFields: {
+					units: {
+						$sortArray: {
+							input: "$unit",
+							sortBy: { createdAt: -1 }
+						}
+					}
+				}
+			},
+
+			// projetc stage
+			{
+				$project: {
+					name: 1,
+					address: 1,
+					city: 1,
+					unitsCount: 1,
+					occupiedUnits: 1,
+					company: 1,
+					units: {
+						_id: 1,
+						unitNumber: 1,
+						isOccupied: 1,
+						squareFeet: 1,
+						bedroom: 1,
+						bathroom: 1,
+					}
+				}
+			}
+		]).exec()
 	}
 
 	async addProperty(payload: AddPropertyDto, user: IFullUser): Promise<PropertyDocument> {
