@@ -24,7 +24,7 @@ export class Property {
 	city: string;
 
 	@Prop({ type: Number, required: true })
-	totalUnits: number;
+	unitsCount: number;
 
 	@Prop({ required: false, default: 0 })
 	occupiedUnits: number;

@@ -30,8 +30,8 @@ export class PropertyService {
 				throw new BadRequestException("Invalid request");
 			}
 
-			// check if totalUnits of the property is less than or equal to
-			if (payload.totalUnits > company.allowedUnits) {
+			// check if unitsCount of the property is less than or equal to
+			if (payload.unitsCount > company.allowedUnits) {
 				throw new BadRequestException("Toatl units of the property can not be greater than companies allowed unit");
 			}
 
@@ -40,7 +40,7 @@ export class PropertyService {
 				name: payload.name,
 				address: payload.address,
 				city: payload.city,
-				totalUnits: payload.totalUnits,
+				unitsCount: payload.unitsCount,
 				company: company._id
 			});
 			const savedProperty = await newProperty.save({ session });
@@ -53,7 +53,7 @@ export class PropertyService {
 			await session.commitTransaction();
 			session.endSession();
 
-			return newProperty;
+			return savedProperty;
 		}
 		catch (error) {
 			// Abort the transaction in case of an error

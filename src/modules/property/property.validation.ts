@@ -18,7 +18,7 @@ export class AddPropertyDto {
 	city: string;
 
 	@ApiProperty({ example: 10, required: true })
-	@IsNotEmpty({ message: 'totalUnits is required' })
+	@IsNotEmpty({ message: 'unitsCount is required' })
 	@IsNumber({}, { message: 'Invalid number' })
-	totalUnits: number;
+	unitsCount: number;
 }
