@@ -57,7 +57,7 @@ export class User {
 	@Prop({ required: false, default: null })
 	imageUrl?: string;
 
-	@Prop({ required: false, default: false })
+	@Prop({ required: true, default: false })
 	isVerified?: boolean;
 
 	@Prop({ required: false, default: false })

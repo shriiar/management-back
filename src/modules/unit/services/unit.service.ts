@@ -173,7 +173,7 @@ export class UnitService {
 				bedroom: payload.bedroom,
 				bathroom: payload.bathroom,
 				property: payload.property,
-				company: user._id
+				company: user.company
 			});
 			const savedUnit = await newUnit.save({ session });
 

@@ -11,6 +11,7 @@ import { AdminModule } from './modules/users/admin/admin.module';
 import { CompanyModule } from './modules/company/company.module';
 import { PropertyModule } from './modules/property/property.module';
 import { UnitModule } from './modules/unit/unit.module';
+import { ProspectModule } from './modules/prospect/prospect.module';
 
 @Module({
 	imports: [
@@ -25,6 +26,7 @@ import { UnitModule } from './modules/unit/unit.module';
 		CompanyModule,
 		PropertyModule,
 		UnitModule,
+		ProspectModule,
 	],
 	controllers: [],
 	providers: [Logger],
