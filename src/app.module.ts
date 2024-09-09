@@ -13,7 +13,7 @@ import { PropertyModule } from './modules/property/property.module';
 import { UnitModule } from './modules/unit/unit.module';
 import { ProspectModule } from './modules/prospect/prospect.module';
 import { TenantModule } from './modules/users/tenant/tenant.module';
-import { LeaseModule } from './lease/lease.module';
+import { LeaseModule } from './modules/lease/lease.module';
 
 @Module({
 	imports: [

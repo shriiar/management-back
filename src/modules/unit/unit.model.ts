@@ -36,6 +36,29 @@ export class Unit {
 	isOccupied: boolean;
 
 	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lease' }],
+		required: false,
+		default: [],
+	})
+	futureTenant: mongoose.Types.ObjectId[] | string[];
+
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lease' }],
+		required: false,
+		default: [],
+	})
+	tenantHistory: mongoose.Types.ObjectId[] | string[];
+
+	@Prop({
+		required: false,
+		default: null,
+		unique: false,
+		ref: 'User',
+		type: mongoose.Schema.Types.ObjectId,
+	})
+	tenant: User;
+
+	@Prop({
 		required: false,
 		default: null,
 		unique: false,

@@ -29,7 +29,12 @@ const models = {
 	'Prospect': {
 		name: Prospect.name,
 		schema: ProspectSchema
-	}
+	},
+
+	// 'Lease': {
+	// 	name: Lease.name,
+	// 	schema: LeaseSchema
+	// }
 }
 
 export const getAllSchema = (): ModelDefinition[] => {
