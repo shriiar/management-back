@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import * as bcrypt from 'bcrypt';
+import { Company } from '../company/company.model';
 
 export type UserDocument = User & Document;
 
@@ -30,21 +31,28 @@ export class User {
 
 	@Prop({
 		required: true,
-		minlength: [6, 'Password must be at least 6 characters long'],
-		maxlength: [20, 'Password must be at most 20 characters long'],
-		select: false, // TODO: uncomment this and handle password select in auth service
+		select: false,
 	})
 	password: string;
 
 	@Prop({
-		required: false,
+		required: true,
 		enum: {
 			values: ['manager', 'accountant', 'admin', 'super_admin'],
 			message: 'Role is either: user or admin',
 		},
 		default: 'manager',
 	})
-	role?: string;
+	role: string;
+
+	@Prop({
+		required: false,
+		default: null,
+		unique: false,
+		ref: 'Company',
+		type: mongoose.Schema.Types.ObjectId,
+	})
+	company: Company;
 
 	@Prop({ required: false, default: null })
 	imageUrl?: string;

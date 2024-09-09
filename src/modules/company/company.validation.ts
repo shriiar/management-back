@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsEmail, IsLowercase, IsNotEmpty, IsNumber, IsObject, IsString, IsStrongPassword, MaxLength, MinLength, ValidateNested } from "class-validator";
+import { IsEmail, IsLowercase, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsStrongPassword, MaxLength, MinLength, ValidateNested } from "class-validator";
 import { Type } from 'class-transformer';
 import { AddUserDto } from "../users/users.validation";
 
@@ -15,15 +15,25 @@ export class AddCompanyDto {
 	@IsLowercase({ message: 'Email must be lowercase' })
 	email: string;
 
+	@ApiProperty({ example: '1216 East Nasirabad', required: true })
+	@IsNotEmpty({ message: 'Address is required' })
+	@IsString({ message: 'Invalid address' })
+	address: string;
+
 	@ApiProperty({ example: 100, required: true })
 	@IsNotEmpty({ message: 'allowedUnits is required' })
 	@IsNumber({}, { message: 'Invalid number' })
 	allowedUnits: number;
 
-	@ApiProperty({ example: { name: 'Fahim', email: 'fahim@gmail.com', password: 'Aa123456' } })
+	@ApiProperty({ example: 'https://lh3.googleusercontent.com/a/ACg8ocL6ENaRyKehVXK-br8c4HYs3ZIPS6ONCA5s191YGEC5=s96-c' })
+	@IsString({ message: 'Image url must be a string' })
+	@IsOptional()
+	imageUrl?: string;
+
+	@ApiProperty({ example: AddUserDto })
 	@IsNotEmpty()
 	@IsObject()
 	@ValidateNested({ each: true })
 	@Type(() => AddUserDto)
-	admin: AddUserDto
+	user: AddUserDto
 }

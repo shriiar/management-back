@@ -13,6 +13,6 @@ export class UsersService {
 
 
 	async findFullUserById(id: string): Promise<User | undefined> {
-		return this.userModel.findById(id).populate('subscription', '-__v').select('-__v -password');
+		return this.userModel.findById(id);
 	}
 }

@@ -26,7 +26,7 @@ async function bootstrap() {
 				enableImplicitConversion: true,
 			},
 			//   skipUndefinedProperties: true,
-			//    skipMissingProperties: true,
+			//   skipMissingProperties: true,
 		}),
 	);
 

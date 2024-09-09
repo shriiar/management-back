@@ -1,11 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { User } from '../users/users.model';
+import { Company } from '../company/company.model';
 
-export type CompanyDocument = Company & Document;
+export type PropertyDocument = Property & Document;
 
 @Schema({ timestamps: true, autoIndex: true })
-export class Company {
+export class Property {
 
 	_id: string | mongoose.Types.ObjectId;
 
@@ -16,34 +17,35 @@ export class Company {
 	})
 	name: string;
 
-	@Prop({ required: true, unique: true, trim: true, lowercase: true })
-	email: string;
-
 	@Prop({ type: String, required: true })
 	address: string;
 
-	@Prop({ required: false, default: 0 })
-	unitsCount: number;
+	@Prop({ type: String, required: true })
+	city: string;
 
 	@Prop({ type: Number, required: true })
-	allowedUnits: number;
+	unitsCount: number;
+
+	@Prop({ required: false, default: 0 })
+	occupiedUnits: number;
 
 	@Prop({
-		required: [true, 'User is required'],
-		unique: true,
-		ref: 'User',
+		required: false,
+		default: null,
+		unique: false,
+		ref: 'Company',
 		type: mongoose.Schema.Types.ObjectId,
 	})
-	admin: User;
-
-	@Prop({ required: false, default: [] })
-	users: [];
-
-	@Prop({ required: false, default: [] })
-	properties: [];
+	company: Company;
 
 	@Prop({ required: false, default: [] })
 	units: [];
+
+	@Prop({ required: false, default: [] })
+	incomePerMonth: [];
+
+	@Prop({ required: false, default: [] })
+	expensePerMonth: [];
 
 	@Prop({ required: false, default: null })
 	imageUrl?: string;
@@ -52,4 +54,4 @@ export class Company {
 	updatedAt: Date;
 }
 
-export const CompanySchema = SchemaFactory.createForClass(Company);
+export const PropertySchema = SchemaFactory.createForClass(Property);

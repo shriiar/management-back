@@ -9,6 +9,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SuperAdminModule } from './modules/users/super-admin/super-admin.module';
 import { AdminModule } from './modules/users/admin/admin.module';
 import { CompanyModule } from './modules/company/company.module';
+import { PropertyModule } from './modules/property/property.module';
+import { UnitModule } from './modules/unit/unit.module';
 
 @Module({
 	imports: [
@@ -21,6 +23,8 @@ import { CompanyModule } from './modules/company/company.module';
 		AuthModule,
 		UsersModule,
 		CompanyModule,
+		PropertyModule,
+		UnitModule,
 	],
 	controllers: [],
 	providers: [Logger],
