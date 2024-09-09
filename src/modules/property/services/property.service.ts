@@ -16,6 +16,47 @@ export class PropertyService {
 		@InjectConnection() private readonly connection: mongoose.Connection,
 	) { }
 
+	public async getPartialProperties(filter: propertyFilter, user: IFullUser) {
+
+		const { name, address, unitsCount, occupiedUnits } = filter;
+
+		return this.propertyModel.aggregate([
+			{
+				$match: {
+					company: new mongoose.Types.ObjectId(user?.company),
+				},
+			},
+			{
+				$sort: { createdAt: -1 },
+			},
+			{
+				$match: {
+					...(name ? { name: { $regex: name, $options: 'i' } } : {}),
+					...(address ? { address: { $regex: address, $options: 'i' } } : {}),
+					...(unitsCount ? { unitsCount: { $eq: unitsCount } } : {}),
+					...(occupiedUnits ? { occupiedUnits: { $eq: occupiedUnits } } : {}),
+				},
+			},
+
+			// Sort by createdAt in descending order
+			{
+				$sort: { createdAt: -1 },
+			},
+
+			// Project the necessary fields
+			{
+				$project: {
+					name: 1,
+					address: 1,
+					city: 1,
+					unitsCount: 1,
+					occupiedUnits: 1,
+					company: 1,
+				},
+			},
+		]).exec();
+	}
+
 	async addProperty(payload: AddPropertyDto, user: IFullUser): Promise<PropertyDocument> {
 
 		// Start a session
@@ -62,4 +103,11 @@ export class PropertyService {
 			throw error;
 		}
 	}
+}
+
+interface propertyFilter {
+	name: string,
+	address: string,
+	unitsCount: number,
+	occupiedUnits: number,
 }
