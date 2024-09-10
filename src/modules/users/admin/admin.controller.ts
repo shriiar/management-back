@@ -7,12 +7,13 @@ import { AddUserDto } from '../users.validation';
 import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { ResponseMessage } from 'src/common/decorators/response_message.decorator';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+import { CurrentUser } from 'src/common/decorators/user.decorator';
+import { IFullUser } from '../users.interface';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
 @Controller('admin')
-// @UseGuards(JwtAuthGuard, RolesGuard)
-// @Roles(USER_ROLE.admin)
+@UseGuards(JwtAuthGuard)
 export class AdminController {
 
 	constructor(
@@ -20,11 +21,14 @@ export class AdminController {
 	) { }
 
 	@Post('add-user')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.admin)
 	@ApiBody({ type: AddUserDto })
 	@ResponseMessage("User added successfully")
 	async addCompany(
-		@Body() body: AddUserDto
+		@Body() body: AddUserDto,
+		@CurrentUser() user: IFullUser
 	) {
-		return await this.adminService.adduser(body);
+		return await this.adminService.adduser(body, user);
 	}
 }

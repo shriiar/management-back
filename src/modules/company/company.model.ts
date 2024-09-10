@@ -36,14 +36,26 @@ export class Company {
 	})
 	admin: User;
 
-	@Prop({ required: false, default: [] })
-	users: [];
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+		required: false,
+		default: [],
+	})
+	users: mongoose.Types.ObjectId[] | string[];
 
-	@Prop({ required: false, default: [] })
-	properties: [];
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Property' }],
+		required: false,
+		default: [],
+	})
+	properties: mongoose.Types.ObjectId[] | string[];
 
-	@Prop({ required: false, default: [] })
-	units: [];
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Unit' }],
+		required: false,
+		default: [],
+	})
+	units: mongoose.Types.ObjectId[] | string[];
 
 	@Prop({ required: false, default: null })
 	imageUrl?: string;

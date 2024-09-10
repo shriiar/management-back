@@ -12,7 +12,7 @@ export class Property {
 
 	@Prop({
 		required: [true, 'Name is required'],
-		minlength: [3, 'Name must be at least 3 characters long'],
+		minlength: [2, 'Name must be at least 2 characters long'],
 		trim: true,
 	})
 	name: string;
@@ -38,8 +38,12 @@ export class Property {
 	})
 	company: Company;
 
-	@Prop({ required: false, default: [] })
-	units: [];
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Unit' }],
+		required: false,
+		default: [],
+	})
+	units: mongoose.Types.ObjectId[] | string[];
 
 	@Prop({ required: false, default: [] })
 	incomePerMonth: [];

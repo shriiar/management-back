@@ -3,6 +3,7 @@ import mongoose, { Document } from 'mongoose';
 import { User } from '../users/users.model';
 import { Company } from '../company/company.model';
 import { Property } from '../property/property.model';
+import { Lease } from '../lease/lease.model';
 
 export type UnitDocument = Unit & Document;
 
@@ -33,7 +34,39 @@ export class Unit {
 	expensePerMonth: [];
 
 	@Prop({ required: false, default: false })
-	isOccupied: string;
+	isOccupied: boolean;
+
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lease' }],
+		required: false,
+		default: [],
+	})
+	futureLeases: mongoose.Types.ObjectId[] | string[];
+
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lease' }],
+		required: false,
+		default: [],
+	})
+	tenantHistories: mongoose.Types.ObjectId[] | string[];
+
+	@Prop({
+		required: false,
+		default: null,
+		unique: false,
+		ref: 'Lease',
+		type: mongoose.Schema.Types.ObjectId,
+	})
+	lease: Lease;
+
+	@Prop({
+		required: false,
+		default: null,
+		unique: false,
+		ref: 'User',
+		type: mongoose.Schema.Types.ObjectId,
+	})
+	tenant: User;
 
 	@Prop({
 		required: false,
