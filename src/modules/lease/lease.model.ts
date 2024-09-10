@@ -45,20 +45,11 @@ export class Lease {
 	ledgers: mongoose.Types.ObjectId[] | string[];
 
 	@Prop({
-		required: true,
+		required: false,
 		ref: 'User',
 		type: mongoose.Schema.Types.ObjectId,
 	})
 	tenant: User;
-
-	@Prop({
-		required: false,
-		default: null,
-		unique: true,
-		ref: 'User',
-		type: mongoose.Schema.Types.ObjectId,
-	})
-	futureTenant: User;
 
 	@Prop({
 		required: true,

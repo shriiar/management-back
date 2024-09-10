@@ -2,13 +2,17 @@ import { ApiProperty } from "@nestjs/swagger"
 import { Type } from "class-transformer";
 import { IsDate, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, ValidateNested } from "class-validator"
 import { AddUserDto } from "../users/users.validation";
-
-enum Frequency {
-	MONTHLY = 'monthly',
-	YEARLY = 'yearly',
-}
+import { Frequency } from "./lease-ledger.model";
+import mongoose, { ObjectId } from "mongoose";
 
 export class RentChargeDto {
+
+	// dp not use these values
+	_id?: mongoose.Types.ObjectId | string;
+	lease?: mongoose.Types.ObjectId | string
+
+
+	// starts from here --->
 	@ApiProperty({ example: 100 })
 	@IsNotEmpty({ message: 'Amount is required' })
 	@IsNumber({}, { message: 'Amount must be a number' })
@@ -26,7 +30,7 @@ export class RentChargeDto {
 
 	@ApiProperty({ example: 'monthly', enum: Frequency })
 	@IsNotEmpty({ message: 'Frequency is required' })
-	@IsEnum(Frequency, { message: 'Frequency must be either "monthly" or "yearly"' })
+	@IsEnum(Frequency, { message: 'Frequency must be "monthly"' })
 	frequency: Frequency;
 
 	@ApiProperty({ example: 1 })
@@ -36,17 +40,15 @@ export class RentChargeDto {
 }
 
 export class AddLeaseDto {
-	@ApiProperty({ example: '2024-01-01', type: Date })
-	@IsNotEmpty({ message: 'LeaseStart is required' })
-	@IsDate({ message: 'LeaseStart must be a valid date' })
-	@Type(() => Date)
-	leaseStart: Date;
+	@ApiProperty({ example: '2023-01-01' })
+	@IsString()
+	@IsNotEmpty()
+	leaseStart: string
 
-	@ApiProperty({ example: '2024-12-31', type: Date })
-	@IsNotEmpty({ message: 'LeaseEnd is required' })
-	@IsDate({ message: 'LeaseEnd must be a valid date' })
-	@Type(() => Date)
-	leaseEnd: Date;
+	@ApiProperty({ example: '2024-02-01' })
+	@IsString()
+	@IsNotEmpty()
+	leaseEnd: string
 
 	@ApiProperty({
 		example:
@@ -63,10 +65,20 @@ export class AddLeaseDto {
 	@IsObject()
 	@ValidateNested({ each: true })
 	@Type(() => AddUserDto)
-	user: AddUserDto
+	tenant: AddUserDto
+
+	@ApiProperty({ example: '66df3d828e5529a5427ed725' })
+	@IsNotEmpty({ message: 'Property is required' })
+	@IsMongoId({ message: 'Property must be a mongoDB ID' })
+	property: string
+
+	@ApiProperty({ example: '66df3d828e5529a5427ed725' })
+	@IsNotEmpty({ message: 'Unit is required' })
+	@IsMongoId({ message: 'Unit must be a mongoDB ID' })
+	unit: string
 
 	@ApiProperty({ example: '66df3d828e5529a5427ed725' })
 	@IsNotEmpty({ message: 'Prospect is required' })
-	@IsMongoId({message: 'Prospect must be a mongoDB ID'})
-	Prospect: string
+	@IsMongoId({ message: 'Prospect must be a mongoDB ID' })
+	prospect: string
 }

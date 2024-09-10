@@ -5,12 +5,12 @@ import { Company } from '../company/company.model';
 import { Property } from '../property/property.model';
 import { Unit } from '../unit/unit.model';
 import { Rent } from './lease-rent.model';
+import { Lease } from './lease.model';
 
 export type LedgerDocument = Ledger & Document;
 
 export enum Frequency {
 	MONTHLY = 'monthly',
-	YEARLY = 'yearly',
 }
 
 @Schema({ timestamps: true, autoIndex: true })
@@ -18,8 +18,8 @@ export class Ledger {
 
 	_id: string | mongoose.Types.ObjectId;
 
-	@Prop({ type: Number, required: true })
-	paymentDay: number;
+	@Prop({ type: String, required: true })
+	paymentDay: string;
 
 	@Prop({ type: String, required: true })
 	description: string;
@@ -47,11 +47,18 @@ export class Ledger {
 	rent: Rent;
 
 	@Prop({
-		required: true,
+		required: false,
 		ref: 'User',
 		type: mongoose.Schema.Types.ObjectId,
 	})
 	tenant: User;
+
+	@Prop({
+		required: true,
+		ref: 'Rent',
+		type: mongoose.Schema.Types.ObjectId,
+	})
+	lease: Lease;
 
 	@Prop({
 		required: true,

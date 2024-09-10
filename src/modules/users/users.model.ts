@@ -38,8 +38,8 @@ export class User {
 	@Prop({
 		required: true,
 		enum: {
-			values: ['manager', 'accountant', 'admin', 'super_admin'],
-			message: 'Role is either: user or admin',
+			values: ['tenant', 'manager', 'accountant', 'admin', 'super_admin'],
+			message: 'Role is either: tenant, manager, accountant, admin or super_admin',
 		},
 		default: 'manager',
 	})
@@ -57,7 +57,7 @@ export class User {
 	@Prop({ required: false, default: null })
 	imageUrl?: string;
 
-	@Prop({ required: true, default: false })
+	@Prop({ required: false, default: true })
 	isVerified?: boolean;
 
 	@Prop({ required: false, default: false })

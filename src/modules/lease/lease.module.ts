@@ -4,6 +4,7 @@ import { LeaseService } from './services/lease.service';
 import { DatabaseModule } from 'src/common/database/database.module';
 import { UsersModule } from '../users/users.module';
 import { HttpModule } from '@nestjs/axios';
+import { CommonService } from 'src/common/services/common.service';
 
 @Module({
 	imports: [
@@ -12,6 +13,6 @@ import { HttpModule } from '@nestjs/axios';
 		HttpModule
 	],
 	controllers: [LeaseController],
-	providers: [LeaseService]
+	providers: [LeaseService, CommonService]
 })
 export class LeaseModule { }

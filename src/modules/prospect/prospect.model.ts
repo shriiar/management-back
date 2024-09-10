@@ -22,6 +22,9 @@ export class Prospect {
 	@Prop({ required: true, unique: false, trim: true, lowercase: true })
 	email: string;
 
+	@Prop({ required: false, default: true })
+	isApproved?: boolean;
+
 	@Prop({
 		required: true,
 		default: null,
