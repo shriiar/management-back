@@ -7,40 +7,45 @@ import { IFullUser } from "src/modules/users/users.interface"
 import { getLastDayOfMonth, isValidDate } from "./dateHandler"
 import mongoose, { Types } from "mongoose"
 
-export function validateLedgerDate(res: IAddLeaseRes, lease: AddLeaseDto | Partial<ILease>) {
+export function validateLedgerDate(payload: {
+	leaseStart: string,
+	leaseEnd: string,
+	occupiedLease: Partial<ILease>,
+	futureLeases: Partial<ILease[]>
+}) {
+
+	const { leaseStart, leaseEnd, occupiedLease, futureLeases } = payload
 
 	// parse the lease start and end dates
-	const leaseStart = moment(lease?.leaseStart).startOf('day');
-	const leaseEnd = moment(lease?.leaseEnd).startOf('day');
+	const leaseStartDate = moment(leaseStart).startOf('day');
+	const leaseEndDate = moment(leaseEnd).startOf('day');
 
 	// Check for valid date range
-	if (!leaseStart.isBefore(leaseEnd)) {
+	if (!leaseStartDate.isBefore(leaseEndDate)) {
 		throw new BadRequestException('Invalid date range');
 	}
 
 	// check against currently occupied lease
-	const occupiedLease = res?.occupiedLease;
 	if (occupiedLease?._id) {
 		const occupiedStartDate = moment(occupiedLease.leaseStart).startOf('day');
 		const occupiedEndDate = moment(occupiedLease.leaseEnd).startOf('day');
 
 		// Validate if the new lease dates overlap with the occupied lease dates
-		if (leaseStart.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]') ||
-			leaseEnd.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]')) {
+		if (leaseStartDate.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]') ||
+			leaseEndDate.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]')) {
 			throw new BadRequestException('Selected dates overlap with an occupied lease. Please select another date range.');
 		}
 	}
 
 	// check against future leases
-	const futureLeases = res?.futureLeases || [];
 	futureLeases.forEach(futureLease => {
 		const futureStartDate = moment(futureLease.leaseStart).startOf('day');
 		const futureEndDate = moment(futureLease.leaseEnd).startOf('day');
 
 		// validate if the new lease dates overlap with any future lease dates
-		if (leaseStart.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
-			leaseEnd.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
-			leaseStart.isSameOrBefore(futureStartDate) && leaseEnd.isSameOrAfter(futureEndDate)) {
+		if (leaseStartDate.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
+			leaseEndDate.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
+			leaseStartDate.isSameOrBefore(futureStartDate) && leaseEndDate.isSameOrAfter(futureEndDate)) {
 			throw new BadRequestException('Selected dates overlap with a future lease. Please select another date range.');
 		}
 	});

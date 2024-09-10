@@ -4,7 +4,7 @@ import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { LeaseService } from './services/lease.service';
 import { IFullUser } from '../users/users.interface';
 import { CurrentUser } from 'src/common/decorators/user.decorator';
-import { AddLeaseDto } from './lease.validation';
+import { AddLeaseDto, RenewLeaseDto } from './lease.validation';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { USER_ROLE } from '../users/users.constant';
@@ -39,5 +39,16 @@ export class LeaseController {
 		@CurrentUser() user: IFullUser
 	) {
 		return await this.leaseService.startLease(leaseId, user);
+	}
+
+	@ApiBody({ type: () => RenewLeaseDto })
+	@Put('renew-tenant')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.manager)
+	async renewLease(
+		@Body() body: RenewLeaseDto,
+		@CurrentUser() user: IFullUser
+	) {
+		return await this.leaseService.renewLease(body, user);
 	}
 }

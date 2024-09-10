@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { AddLeaseDto } from '../lease.validation';
+import { AddLeaseDto, RenewLeaseDto } from '../lease.validation';
 import { IFullUser } from 'src/modules/users/users.interface';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { User } from 'src/modules/users/users.model';
@@ -50,7 +50,7 @@ export class LeaseService {
 			session.startTransaction();
 
 			// Fetch unit and associated data using aggregation
-			const [data] = await this.unitModel.aggregate([
+			const [res] = await this.unitModel.aggregate([
 				{
 					$match: {
 						_id: new mongoose.Types.ObjectId(unit),
@@ -58,17 +58,6 @@ export class LeaseService {
 						company: new mongoose.Types.ObjectId(user?.company),
 					}
 				},
-
-				// getting property 
-				{
-					$lookup: {
-						from: COLLECTIONS.properties,
-						localField: REFERENCE.property,
-						foreignField: "_id",
-						as: "property"
-					}
-				},
-				{ $unwind: "$property" },
 
 				// getting prospect
 				{
@@ -128,7 +117,6 @@ export class LeaseService {
 				// project stage
 				{
 					$project: {
-
 						// unit data
 						_id: 1,
 						isOccupied: 1,
@@ -136,12 +124,7 @@ export class LeaseService {
 						company: 1,
 						tenantHistories: 1,
 						tenant: 1,
-
-						// property data
-						property: {
-							_id: "$property._id",
-							occupiedUnits: "$property.occupiedUnits"
-						},
+						property: 1,
 
 						// occupied lease data if there is else null
 						occupiedLease: {
@@ -180,8 +163,8 @@ export class LeaseService {
 				}
 			]).exec();
 
-			if (!data) throw new BadRequestException('Invalid request');
-			if (!data?.prospect?.isApproved) throw new BadRequestException('The prospect is not approved yet. To assign it to a new unit, change the status to approved.');
+			if (!res) throw new BadRequestException('Invalid request');
+			if (!res?.prospect?.isApproved) throw new BadRequestException('The prospect is not approved yet. To assign it to a new unit, change the status to approved.');
 
 			// validate the dates
 			if (!isValidDate(leaseStart) || !isValidDate(leaseEnd)) throw new BadRequestException('Invalid date range');
@@ -198,7 +181,12 @@ export class LeaseService {
 			const isPast = leaseEnd < today;
 
 			// Validate the given date range
-			validateLedgerDate(data, payload);
+			validateLedgerDate({
+				leaseStart: leaseStart,
+				leaseEnd: leaseEnd,
+				occupiedLease: res?.occupiedLease || null,
+				futureLeases: res?.futureLeases || []
+			});
 
 			// Tenant operations if in present or future
 			let tenantId = null;
@@ -232,13 +220,13 @@ export class LeaseService {
 			const leaseId = new mongoose.Types.ObjectId();
 
 			const { ledgers, rents } = await populateLedgers({
-				leaseStart: payload.leaseStart,
-				leaseEnd: payload.leaseEnd,
+				leaseStart: leaseStart,
+				leaseEnd: leaseEnd,
 				rents: payload.rents as IRent[],
 				tenant: tenantId,
 				lease: leaseId,
-				unit: payload.unit,
-				property: payload.property,
+				unit: unit,
+				property: property,
 				company: user?.company
 			});
 
@@ -250,17 +238,21 @@ export class LeaseService {
 
 			// Update property and unit if necessary
 			if (!isPast && !isFuture) {
-				await this.propertyModel.updateOne({ _id: new mongoose.Types.ObjectId(property) }, { $inc: { occupiedUnits: 1 } }, { session });
-			}
+				await this.propertyModel.updateOne(
+					{ _id: new mongoose.Types.ObjectId(property) },
+					{ $inc: { occupiedUnits: 1 } },
+					{ session }
+				)
+			};
 
 			// update unit
 			await this.unitModel.updateOne(
 				{ _id: new mongoose.Types.ObjectId(unit) },
 				{
 					$set: {
-						isOccupied: (isFuture || isPast) ? data?.isOccupied : true,
-						lease: (isFuture || isPast) ? data?.lease : leaseId,
-						tenant: (isFuture || isPast) ? data?.tenant : tenantId,
+						isOccupied: (isFuture || isPast) ? res?.isOccupied : true,
+						lease: (isFuture || isPast) ? res?.lease : leaseId,
+						tenant: (isFuture || isPast) ? res?.tenant : tenantId,
 					},
 					$push: {
 						...(isFuture && { futureLeases: leaseId }),
@@ -276,15 +268,15 @@ export class LeaseService {
 			// Create and save new lease
 			const newLease = new this.leaseModel({
 				_id: leaseId,
-				leaseStart: payload.leaseStart,
-				leaseEnd: payload.leaseEnd,
+				leaseStart: leaseStart,
+				leaseEnd: leaseEnd,
 				rents,
 				ledgers: !isFuture ? ledgers : [],
 				isFutureLease: !!isFuture,
 				isClosed: !!isPast,
 				tenant: tenantId,
-				unit: new mongoose.Types.ObjectId(payload.unit),
-				property: new mongoose.Types.ObjectId(payload.property),
+				unit: new mongoose.Types.ObjectId(unit),
+				property: new mongoose.Types.ObjectId(property),
 				company: new mongoose.Types.ObjectId(user?.company),
 			});
 
@@ -365,17 +357,6 @@ export class LeaseService {
 				},
 				{ $unwind: "$unit" },
 
-				// property lookup
-				{
-					$lookup: {
-						from: COLLECTIONS.properties,
-						localField: REFERENCE.property,
-						foreignField: "_id",
-						as: "property"
-					}
-				},
-				{ $unwind: "$property" },
-
 				// match stage
 				{
 					$match: {
@@ -392,12 +373,9 @@ export class LeaseService {
 						leaseStart: 1,
 						leaseEnd: 1,
 						tenant: 1,
+						property: 1,
 
 						// aggregate fields
-						property: {
-							_id: "$property._id",
-							occupiedUnits: "$property.occupiedUnits",
-						},
 						unit: {
 							_id: "$unit._id",
 							isOccupied: "$unit.isOccupied",
@@ -407,17 +385,15 @@ export class LeaseService {
 				}
 			]).exec();
 
-			if (!res || !res?.unit?._id || !res?.property?._id) {
+			if (!res) {
 				throw new BadRequestException("Invalid request");
 			}
 
-			if (res?.unit?.isOccupied) {
+			if (res.unit.isOccupied) {
 				throw new BadRequestException('The unit is already occupied by another tenant');
 			}
 
 			const today = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
-			const currentTime = moment().tz(DEFAULT_TIMEZONE).valueOf();
-			const leaseStart = res?.leaseStart;
 			const leaseEnd = res?.leaseEnd;
 
 			// For now we can start the lease when ever we want
@@ -436,7 +412,7 @@ export class LeaseService {
 				tenant: res.tenant,
 				lease: res._id,
 				unit: res.unit._id,
-				property: res.property._id,
+				property: res.property,
 				company: user?.company
 			});
 
@@ -445,7 +421,7 @@ export class LeaseService {
 
 			// update property
 			await this.propertyModel.updateOne(
-				{ _id: res.property._id },
+				{ _id: res.property },
 				{ $inc: { occupiedUnits: 1 } },
 				{ session }
 			);
@@ -486,6 +462,147 @@ export class LeaseService {
 			return savedLease;
 
 		} catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+	}
+
+	// renew lease function
+	async renewLease(payload: RenewLeaseDto, user: IFullUser): Promise<LeaseDocument> {
+
+		const { leaseId, leaseEnd } = payload;
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			// validating lease date
+			if (!isValidDate(leaseEnd)) {
+				throw new BadRequestException('Invalid lease end date')
+			}
+
+			// lease end date must be last day of the given month
+			const lastDayOfMonth = moment(leaseEnd).endOf('month').format('YYYY-MM-DD')
+			if (lastDayOfMonth !== leaseEnd) {
+				throw new BadRequestException('Lease end date must be last day of the given month')
+			}
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						"_id": new mongoose.Types.ObjectId(leaseId),
+						"company": new mongoose.Types.ObjectId(user?.company),
+						"isEviction": false,
+						"isClosed": false,
+						"isFutureLease": false
+					}
+				},
+
+				// get associated unit
+				{
+					$lookup: {
+						from: COLLECTIONS.units,
+						localField: "unit",
+						foreignField: "_id",
+						as: "unitData"
+					}
+				},
+				{ $unwind: "$unitData" },
+
+				// for the assocaited unit get future leases
+				{
+					$lookup: {
+						from: COLLECTIONS.leases,
+						localField: "unitData.futureLeases",
+						foreignField: "_id",
+						as: "futureLeases"
+					}
+				},
+				{
+					$project: {
+						_id: 1,
+						leaseStart: 1,
+						leaseEnd: 1,
+						tenant: 1,
+						unit: 1,
+						property: 1,
+						futureLeases: {
+							$map: {
+								input: "$futureLeases",
+								as: "futureLease",
+								in: {
+									_id: "$$futureLease._id",
+									leaseStart: "$$futureLease.leaseStart",
+									leaseEnd: "$$futureLease.leaseEnd"
+								}
+							}
+						},
+					}
+				}
+			]).exec();
+			if (!res) {
+				throw new BadRequestException('Invalid request')
+			}
+
+			const newLeaseEnd = leaseEnd;
+			const newLeaseStart = moment(res?.leaseEnd).add(1, 'day').format('YYYY-MM-DD');
+			const prevLeaseEnd = res?.leaseEnd;
+
+			if (newLeaseEnd <= prevLeaseEnd) {
+				throw new BadRequestException('Given lease end must be greater than the current lease end date');
+			}
+
+			// Validate the given date range
+			validateLedgerDate({
+				leaseStart: newLeaseStart,
+				leaseEnd: newLeaseEnd,
+				occupiedLease: res?.occupiedLease || null,
+				futureLeases: res?.futureLeases || []
+			});
+
+			const { ledgers, rents } = await populateLedgers({
+				leaseStart: newLeaseStart,
+				leaseEnd: newLeaseEnd,
+				rents: payload.rents as Partial<IRent[]>,
+				tenant: res.tenant,
+				lease: res._id,
+				unit: res.unit,
+				property: res.property,
+				company: user?.company
+			});
+
+			// Insert rents and ledgers
+			await Promise.all([
+				this.ledgerModel.insertMany(ledgers, { session, ordered: false }),
+				this.rentModel.insertMany(rents, { session, ordered: false })
+			]);
+
+			// update lease
+			const savedLease = await this.leaseModel.findOneAndUpdate(
+				{ _id: res._id },
+				{
+					$set: {
+						leaseEnd: newLeaseEnd,
+					},
+					$push: {
+						rents: { $each: rents },
+						ledgers: { $each: ledgers }
+					}
+				},
+				{ session }
+			);
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return savedLease;
+		}
+		catch (error) {
 			// Abort the transaction in case of an error
 			await session.abortTransaction();
 			session.endSession();
