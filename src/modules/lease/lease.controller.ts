@@ -42,7 +42,7 @@ export class LeaseController {
 	}
 
 	@ApiBody({ type: () => RenewLeaseDto })
-	@Put('renew-tenant')
+	@Put('renew-lease')
 	@UseGuards(RolesGuard)
 	@Roles(USER_ROLE.manager)
 	async renewLease(
@@ -50,5 +50,15 @@ export class LeaseController {
 		@CurrentUser() user: IFullUser
 	) {
 		return await this.leaseService.renewLease(body, user);
+	}
+
+	@Put('end-lease/:leaseId')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.manager)
+	async endLease(
+		@Param('leaseId', ValidateMongoId) leaseId: string,
+		@CurrentUser() user: IFullUser
+	) {
+		return await this.leaseService.endLease(leaseId, user)
 	}
 }

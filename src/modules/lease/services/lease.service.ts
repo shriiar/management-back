@@ -609,4 +609,123 @@ export class LeaseService {
 			throw error;
 		}
 	}
+
+	// end current lease
+	async endLease(leaseId: string, user: IFullUser) {
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						_id: new mongoose.Types.ObjectId(leaseId),
+						company: new mongoose.Types.ObjectId(user?.company),
+						isClosed: false,
+						isFutureLease: false,
+						isEviction: false
+					}
+				},
+
+				// project stage
+				{
+					$project: {
+						_id: 1,
+						tenant: 1,
+						unit: 1,
+						property: 1,
+						company: 1,
+					}
+				}
+			]).exec();
+			if (!res) {
+				throw new BadRequestException("Invalid request");
+			}
+
+			// Removing all the rents and ledgers
+			const deleteResults = await Promise.all([
+				this.ledgerModel.deleteMany({ lease: new mongoose.Types.ObjectId(leaseId) }, { session }),
+				this.rentModel.deleteMany({ lease: new mongoose.Types.ObjectId(leaseId) }, { session })
+			]);
+			deleteResults.forEach(result => {
+				if (result.deletedCount === 0) {
+					throw new BadRequestException("Failed to delete rents or ledgers");
+				}
+			});
+
+			// Update property
+			const propertyUpdateResult = await this.propertyModel.updateOne(
+				{ _id: res.property },
+				{ $inc: { occupiedUnits: -1 } },
+				{ session }
+			);
+			if (propertyUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update property");
+			}
+
+			// Update unit
+			const unitUpdateResult = await this.unitModel.updateOne(
+				{ _id: res.unit },
+				{
+					$set: {
+						isOccupied: false,
+						lease: null,
+						tenant: null
+					}
+				},
+				{ session }
+			);
+			if (unitUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update unit");
+			}
+
+			// Remove tenant
+			const tenantDeleteResult = await this.userModel.deleteOne(
+				{ _id: res.tenant },
+				{ session }
+			);
+			if (tenantDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete tenant");
+			}
+
+			// Update company to remove tenant
+			const companyUpdateResult = await this.companyModel.updateOne(
+				{ _id: res.company },
+				{
+					$pull: {
+						users: res.tenant,
+					}
+				},
+				{ session }
+			);
+			if (companyUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update company");
+			}
+
+			// Remove lease
+			const leaseDeleteResult = await this.leaseModel.deleteOne(
+				{ _id: new mongoose.Types.ObjectId(leaseId) },
+				{ session }
+			);
+			if (leaseDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete lease");
+			}
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return;
+		}
+		catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+
+	}
 }
