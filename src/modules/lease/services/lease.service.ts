@@ -13,12 +13,12 @@ import * as moment from 'moment-timezone';
 import { DEFAULT_TIMEZONE } from 'src/common/config/timezone.config';
 import { isValidDate } from 'src/utils/dateHandler';
 import { populateLedgers, validateLedgerDate } from 'src/utils/leaseHandler';
-import { IAddLeaseRes } from '../lease.interface';
 import { CommonService } from 'src/common/services/common.service';
 import { Lease, LeaseDocument } from '../lease.model';
 import { Rent } from '../lease-rent.model';
 import { Ledger } from '../lease-ledger.model';
 import { USER_ROLE } from 'src/modules/users/users.constant';
+import { IRent } from '../lease.interface';
 
 @Injectable()
 export class LeaseService {
@@ -38,9 +38,10 @@ export class LeaseService {
 		private readonly commonService: CommonService
 	) { }
 
+	// add lease function
 	async addLease(payload: AddLeaseDto, user: IFullUser): Promise<LeaseDocument | any> {
 
-		const { leaseStart, leaseEnd, rentCharges, property, unit, prospect, tenant } = payload;
+		const { leaseStart, leaseEnd, rents, property, unit, prospect, tenant } = payload;
 
 		// Start a session
 		const session = await this.connection.startSession();
@@ -229,7 +230,17 @@ export class LeaseService {
 
 			// Lease and rent operations
 			const leaseId = new mongoose.Types.ObjectId();
-			const { ledgers, rents } = await populateLedgers(payload, tenantId, leaseId, user?.company);
+
+			const { ledgers, rents } = await populateLedgers({
+				leaseStart: payload.leaseStart,
+				leaseEnd: payload.leaseEnd,
+				rents: payload.rents as IRent[],
+				tenant: tenantId,
+				lease: leaseId,
+				unit: payload.unit,
+				property: payload.property,
+				company: user?.company
+			});
 
 			// Insert rents and (if necessary) ledgers
 			await Promise.all([
@@ -269,7 +280,7 @@ export class LeaseService {
 				leaseEnd: payload.leaseEnd,
 				rents,
 				ledgers: !isFuture ? ledgers : [],
-				isFutureTenant: !!isFuture,
+				isFutureLease: !!isFuture,
 				isClosed: !!isPast,
 				tenant: tenantId,
 				unit: new mongoose.Types.ObjectId(payload.unit),
@@ -292,4 +303,193 @@ export class LeaseService {
 		}
 	}
 
+	// start lease function for FUTURE LEASE
+	async startLease(leaseId: string, user: IFullUser): Promise<LeaseDocument> {
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						"_id": new mongoose.Types.ObjectId(leaseId),
+						"company": new mongoose.Types.ObjectId(user?.company),
+						"isFutureLease": true
+					}
+				},
+
+				// rent lookup
+				{
+					$lookup: {
+						from: COLLECTIONS.rents,
+						localField: REFERENCE.rents,
+						foreignField: "_id",
+						as: "rents"
+					}
+				},
+				// Add fields stage to directly extract the rents data
+				{
+					$addFields: {
+						rents: {
+							$cond: {
+								if: { $isArray: "$rents" },
+								then: {
+									$map: {
+										input: "$rents",  // Process rents array
+										as: "rent",
+										in: {
+											_id: "$$rent._id",
+											description: "$$rent.description",
+											amount: "$$rent.amount",
+											paymentDay: "$$rent.paymentDay"
+										}
+									}
+								},
+								else: []
+							}
+						}
+					}
+				},
+
+				// unit lookup
+				{
+					$lookup: {
+						from: COLLECTIONS.units,
+						localField: REFERENCE.unit,
+						foreignField: "_id",
+						as: "unit"
+					}
+				},
+				{ $unwind: "$unit" },
+
+				// property lookup
+				{
+					$lookup: {
+						from: COLLECTIONS.properties,
+						localField: REFERENCE.property,
+						foreignField: "_id",
+						as: "property"
+					}
+				},
+				{ $unwind: "$property" },
+
+				// match stage
+				{
+					$match: {
+						"unit.futureLeases": { $in: [new mongoose.Types.ObjectId(leaseId)] },
+					}
+				},
+
+				// project stage
+				{
+					$project: {
+
+						// local fields
+						_id: 1,
+						leaseStart: 1,
+						leaseEnd: 1,
+						tenant: 1,
+
+						// aggregate fields
+						property: {
+							_id: "$property._id",
+							occupiedUnits: "$property.occupiedUnits",
+						},
+						unit: {
+							_id: "$unit._id",
+							isOccupied: "$unit.isOccupied",
+						},
+						rents: 1,
+					}
+				}
+			]).exec();
+
+			if (!res || !res?.unit?._id || !res?.property?._id) {
+				throw new BadRequestException("Invalid request");
+			}
+
+			if (res?.unit?.isOccupied) {
+				throw new BadRequestException('The unit is already occupied by another tenant');
+			}
+
+			const today = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
+			const currentTime = moment().tz(DEFAULT_TIMEZONE).valueOf();
+			const leaseStart = res?.leaseStart;
+			const leaseEnd = res?.leaseEnd;
+
+			// For now we can start the lease when ever we want
+			// if (leaseStart > today) {
+			// 	throw new BadRequestException('Lease start date is in future. You cant start the lease for a future tenant');
+			// }
+
+			if (leaseEnd < today) {
+				throw new BadRequestException('Lease end date for this tenant has passed. You can not start the lease');
+			}
+
+			const { ledgers, rents } = await populateLedgers({
+				leaseStart: today,
+				leaseEnd: res.leaseEnd,
+				rents: res.rents,
+				tenant: res.tenant,
+				lease: res._id,
+				unit: res.unit._id,
+				property: res.property._id,
+				company: user?.company
+			});
+
+			// adding ledgers to the ledger collection
+			this.ledgerModel.insertMany(ledgers, { session, ordered: false });
+
+			// update property
+			await this.propertyModel.updateOne(
+				{ _id: res.property._id },
+				{ $inc: { occupiedUnits: 1 } },
+				{ session }
+			);
+
+			// update unit
+			await this.unitModel.updateOne(
+				{ _id: res.unit._id },
+				{
+					$set: {
+						isOccupied: true,
+						lease: new mongoose.Types.ObjectId(leaseId),
+						tenant: res.tenant
+					},
+					$pull: {
+						futureLeases: new mongoose.Types.ObjectId(leaseId),
+					}
+				},
+				{ session }
+			);
+
+			// update lease
+			const savedLease = await this.leaseModel.findOneAndUpdate(
+				{ _id: res._id },
+				{
+					$set: {
+						leaseStart: today,
+						isFutureLease: false,
+						ledgers: ledgers,
+					}
+				},
+				{ session }
+			);
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return savedLease;
+
+		} catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+	}
 }

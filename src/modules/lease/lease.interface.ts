@@ -3,8 +3,6 @@ import { User } from '../users/users.model';
 import { Company } from '../company/company.model';
 import { Property } from '../property/property.model';
 import { Unit } from '../unit/unit.model';
-import { IFullUser } from '../users/users.interface';
-import { Lease } from './lease.model';
 
 export interface ILedger {
 	_id: string | Types.ObjectId;
@@ -63,32 +61,32 @@ export interface ILease {
 }
 
 export interface IAddLeaseRes {
-	_id: number | string;
+	_id: string | Types.ObjectId;
 	isOccupied: boolean;
-	lease: string | null;
-	company: string | null;
+	lease: string | Types.ObjectId;
+	company: string | Types.ObjectId;
 	tenantHistories: string[] | null;
-	tenant: string | null;
+	tenant: string | Types.ObjectId;
 
 	property: {
-		_id: string | number;
+		_id: string | Types.ObjectId;
 		occupiedUnits: number;
 	};
 
 	occupiedLease: {
-		_id: string | number;
+		_id: string | Types.ObjectId;
 		leaseStart: Date;
 		leaseEnd: Date;
 	} | null;
 
 	futureLeases: {
-		_id: string | number;
+		_id: string | Types.ObjectId;
 		leaseStart: Date;
 		leaseEnd: Date;
 	}[];
 
 	prospect: {
-		_id: string | number;
+		_id: string | Types.ObjectId;
 		name: string;
 		email: string;
 		isApproved: boolean;

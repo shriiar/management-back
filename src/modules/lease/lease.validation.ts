@@ -7,12 +7,6 @@ import mongoose, { ObjectId } from "mongoose";
 
 export class RentChargeDto {
 
-	// dp not use these values
-	_id?: mongoose.Types.ObjectId | string;
-	lease?: mongoose.Types.ObjectId | string
-
-
-	// starts from here --->
 	@ApiProperty({ example: 100 })
 	@IsNotEmpty({ message: 'Amount is required' })
 	@IsNumber({}, { message: 'Amount must be a number' })
@@ -58,7 +52,7 @@ export class AddLeaseDto {
 	})
 	@ValidateNested({ each: true })
 	@Type(() => RentChargeDto)
-	rentCharges: RentChargeDto[]
+	rents: RentChargeDto[]
 
 	@ApiProperty({ example: AddUserDto })
 	@IsNotEmpty()

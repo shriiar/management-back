@@ -5,7 +5,7 @@ import { IAddLeaseRes, ILease, ILedger, IRent } from "src/modules/lease/lease.in
 import { AddLeaseDto } from "src/modules/lease/lease.validation"
 import { IFullUser } from "src/modules/users/users.interface"
 import { getLastDayOfMonth, isValidDate } from "./dateHandler"
-import mongoose from "mongoose"
+import mongoose, { Types } from "mongoose"
 
 export function validateLedgerDate(res: IAddLeaseRes, lease: AddLeaseDto | Partial<ILease>) {
 
@@ -47,10 +47,16 @@ export function validateLedgerDate(res: IAddLeaseRes, lease: AddLeaseDto | Parti
 }
 
 export function populateLedgers(
-	payload: AddLeaseDto,
-	tenant: mongoose.Types.ObjectId | string,
-	lease: mongoose.Types.ObjectId | string,
-	company: mongoose.Types.ObjectId | string): Promise<{
+	payload: {
+		leaseStart: string,
+		leaseEnd: string,
+		rents: Partial<IRent[]>,
+		tenant: string | Types.ObjectId,
+		lease: string | Types.ObjectId,
+		unit: string | Types.ObjectId,
+		property: string | Types.ObjectId,
+		company: string | Types.ObjectId,
+	}): Promise<{
 		rents: Partial<IRent>[],
 		ledgers: Partial<ILedger>[]
 	}> {
@@ -64,7 +70,7 @@ export function populateLedgers(
 
 	const todayDate = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
 
-	payload?.rentCharges.forEach(rentCharge => {
+	payload?.rents.forEach(rentCharge => {
 
 		// assigniong new parent id to each rent charge
 		const rent = rentCharge?._id ? new mongoose.Types.ObjectId(rentCharge?._id) : new mongoose.Types.ObjectId();
@@ -72,11 +78,11 @@ export function populateLedgers(
 		rents.push({
 			...rentCharge,
 			_id: rent,
-			tenant: tenant ? new mongoose.Types.ObjectId(tenant) : null,
-			lease: new mongoose.Types.ObjectId(lease),
+			tenant: payload.tenant ? new mongoose.Types.ObjectId(payload.tenant) : null,
+			lease: new mongoose.Types.ObjectId(payload.lease),
 			unit: new mongoose.Types.ObjectId(payload?.unit),
 			property: new mongoose.Types.ObjectId(payload?.property),
-			company: new mongoose.Types.ObjectId(company),
+			company: new mongoose.Types.ObjectId(payload.company),
 		})
 
 		const paymentDay = rentCharge.paymentDay;
@@ -106,15 +112,21 @@ export function populateLedgers(
 				frequency: 'monthly',
 				isPaid: false,
 				rent: new mongoose.Types.ObjectId(rent),
-				tenant: tenant ? new mongoose.Types.ObjectId(tenant) : null,
-				lease: new mongoose.Types.ObjectId(lease),
+				tenant: payload.tenant ? new mongoose.Types.ObjectId(payload.tenant) : null,
+				lease: new mongoose.Types.ObjectId(payload.lease),
 				unit: new mongoose.Types.ObjectId(payload?.unit),
 				property: new mongoose.Types.ObjectId(payload?.property),
-				company: new mongoose.Types.ObjectId(company),
+				company: new mongoose.Types.ObjectId(payload.company),
 			};
 
 			ledgers.push(ledger);
 		});
+	});
+
+	ledgers.sort((a, b) => {
+		const dateA: any = new Date(a.paymentDay);
+		const dateB: any = new Date(b.paymentDay);
+		return dateA - dateB;
 	});
 
 	return Promise.resolve({ rents, ledgers });

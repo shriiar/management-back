@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { LeaseService } from './services/lease.service';
@@ -8,6 +8,7 @@ import { AddLeaseDto } from './lease.validation';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { USER_ROLE } from '../users/users.constant';
+import { ValidateMongoId } from 'src/common/exception-filters/mongodbId.filters';
 
 @ApiTags('Lease')
 @Controller('lease')
@@ -28,5 +29,15 @@ export class LeaseController {
 		@CurrentUser() user: IFullUser,
 	) {
 		return await this.leaseService.addLease(body, user);
+	}
+
+	@Put('start-lease/:leaseId')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.manager)
+	async startLease(
+		@Param('leaseId', ValidateMongoId) leaseId: string,
+		@CurrentUser() user: IFullUser
+	) {
+		return await this.leaseService.startLease(leaseId, user);
 	}
 }
