@@ -728,4 +728,107 @@ export class LeaseService {
 		}
 
 	}
+
+	// cancel move in for future tenant
+	async cancelMoveIn(leaseId: string, user: IFullUser) {
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						_id: new mongoose.Types.ObjectId(leaseId),
+						company: new mongoose.Types.ObjectId(user?.company),
+						isClosed: false,
+						isFutureLease: true
+					}
+				},
+
+				// project stage
+				{
+					$project: {
+						_id: 1,
+						tenant: 1,
+						unit: 1,
+						property: 1,
+						company: 1,
+					}
+				}
+			]).exec();
+			if (!res) {
+				throw new BadRequestException("Invalid request");
+			}
+
+			// Remove rents
+			const rentDeleteResult = await this.rentModel.deleteMany(
+				{ lease: new mongoose.Types.ObjectId(leaseId) },
+				{ session }
+			);
+			if (rentDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("No rents were deleted for this lease.");
+			}
+
+			// Update unit
+			const unitUpdateResult = await this.unitModel.updateOne(
+				{ _id: res.unit },
+				{
+					$pull: {
+						futureLeases: new mongoose.Types.ObjectId(leaseId),
+					}
+				},
+				{ session }
+			);
+			if (unitUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update unit");
+			}
+
+			// Remove tenant
+			const tenantDeleteResult = await this.userModel.deleteOne(
+				{ _id: res.tenant },
+				{ session }
+			);
+			if (tenantDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete tenant");
+			}
+
+			// Update company to remove tenant
+			const companyUpdateResult = await this.companyModel.updateOne(
+				{ _id: res.company },
+				{
+					$pull: {
+						users: res.tenant,
+					}
+				},
+				{ session }
+			);
+			if (companyUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update company");
+			}
+
+			// Remove lease
+			const leaseDeleteResult = await this.leaseModel.deleteOne(
+				{ _id: new mongoose.Types.ObjectId(leaseId) },
+				{ session }
+			);
+			if (leaseDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete lease");
+			}
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return;
+		}
+		catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+	}
 }

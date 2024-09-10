@@ -61,4 +61,14 @@ export class LeaseController {
 	) {
 		return await this.leaseService.endLease(leaseId, user)
 	}
+
+	@Put('cancel-move-in/:leaseId')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.manager)
+	async cancelMoveIn(
+		@Param('leaseId', ValidateMongoId) leaseId: string,
+		@CurrentUser() user: IFullUser
+	) {
+		return await this.leaseService.cancelMoveIn(leaseId, user)
+	}
 }
