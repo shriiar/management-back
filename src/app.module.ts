@@ -14,6 +14,9 @@ import { UnitModule } from './modules/unit/unit.module';
 import { ProspectModule } from './modules/prospect/prospect.module';
 import { TenantModule } from './modules/users/tenant/tenant.module';
 import { LeaseModule } from './modules/lease/lease.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { CronModule } from './modules/cron/cron.module';
+import { CronLeaseService } from './modules/cron/services/cron-lease.service';
 
 @Module({
 	imports: [
@@ -22,6 +25,7 @@ import { LeaseModule } from './modules/lease/lease.module';
 			isGlobal: true,
 			load: [envConfig],
 		}),
+		ScheduleModule.forRoot(),
 		DatabaseModule,
 		AuthModule,
 		UsersModule,
@@ -31,6 +35,7 @@ import { LeaseModule } from './modules/lease/lease.module';
 		ProspectModule,
 		TenantModule,
 		LeaseModule,
+		CronModule,
 	],
 	controllers: [],
 	providers: [Logger],

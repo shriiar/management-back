@@ -11,7 +11,7 @@ export class Company {
 
 	@Prop({
 		required: [true, 'Name is required'],
-		minlength: [3, 'Name must be at least 3 characters long'],
+		minlength: [2, 'Name must be at least 2 characters long'],
 		trim: true,
 	})
 	name: string;
