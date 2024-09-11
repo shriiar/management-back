@@ -1,5 +1,5 @@
-import { Body, Controller, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { LeaseService } from './services/lease.service';
 import { IFullUser } from '../users/users.interface';
@@ -19,6 +19,43 @@ export class LeaseController {
 	constructor(
 		private readonly leaseService: LeaseService
 	) { }
+
+	// Tenant
+	@Get('partial-tenants')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.manager)
+	@ApiQuery({ name: 'propertyId', required: false })
+	@ApiQuery({ name: 'unitId', required: false })
+	@ApiQuery({ name: 'name', required: false })
+	@ApiQuery({ name: 'email', required: false })
+	@ApiQuery({ name: 'fromStart', required: false })
+	@ApiQuery({ name: 'toStart', required: false })
+	@ApiQuery({ name: 'fromEnd', required: false })
+	@ApiQuery({ name: 'toEnd', required: false })
+	@ApiQuery({ name: 'isFutureLease', required: false })
+	@ApiQuery({ name: 'sortBy', required: false })
+	@ApiQuery({ name: 'sortOrder', required: false })
+	async getLeases(
+		@Query('page') pageNumber: number,
+		@Query('limit') rowsPerPage: number,
+		@Query('propertyId') propertyId: string,
+		@Query('unitId') unitId: string,
+		@Query('name') name: string,
+		@Query('email') email: string,
+		@Query('fromStart') fromStart: string,
+		@Query('toStart') toStart: string,
+		@Query('fromEnd') fromEnd: string,
+		@Query('toEnd') toEnd: string,
+		@Query('isFutureLease') isFutureLease: boolean,
+		@Query('sortBy') sortBy: string,
+		@Query('sortOrder') sortOrder: number,
+		@CurrentUser() user: IFullUser,
+	) {
+		let filter = {
+			propertyId, unitId, name, email, isFutureLease, fromStart, toStart, fromEnd, toEnd, sortBy, sortOrder
+		}
+		return await this.leaseService.getLeases(pageNumber, rowsPerPage, filter, user);
+	}
 
 	@Post('add-lease')
 	@UseGuards(RolesGuard)

@@ -4,7 +4,7 @@ import { IFullUser } from 'src/modules/users/users.interface';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { User } from 'src/modules/users/users.model';
 import { Company } from 'src/modules/company/company.model';
-import mongoose, { Model } from 'mongoose';
+import mongoose, { Model, Types } from 'mongoose';
 import { Property } from 'src/modules/property/property.model';
 import { Unit } from 'src/modules/unit/unit.model';
 import { Prospect } from 'src/modules/prospect/prospect.model';
@@ -37,6 +37,191 @@ export class LeaseService {
 		// services
 		private readonly commonService: CommonService
 	) { }
+
+	async getLeases(page: number, limit: number, filter: IGetLeases, user: IFullUser) {
+
+		page = page || 1;
+		limit = limit || 10;
+		const skip = (page - 1) * limit;
+
+		const todayDate = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
+
+		let { propertyId, unitId, name, email, isFutureLease, fromStart, toStart, fromEnd, toEnd } = filter;
+
+		if (fromStart && !toStart) {
+			toStart = todayDate;
+		}
+		if (fromEnd && !toEnd) {
+			toEnd = todayDate;
+		}
+
+		const searchCond: any[] = [];
+
+		if (fromStart && toStart) {
+			searchCond.push({ leaseStart: { $gte: fromStart, $lte: toStart } });
+		}
+		if (fromEnd && toEnd) {
+			searchCond.push({ leaseEnd: { $gte: fromEnd, $lte: toEnd } });
+		}
+		if (propertyId) {
+			searchCond.push({ propertyId: new mongoose.Types.ObjectId(propertyId) });
+		}
+		if (unitId) {
+			searchCond.push({ unitId: new mongoose.Types.ObjectId(unitId) });
+		}
+		if (name) {
+			searchCond.push({ "user.name": { $regex: name, $options: 'i' } });
+		}
+		if (email) {
+			searchCond.push({ "user.email": { $regex: email, $options: 'i' } });
+		}
+
+		const matchStage = {
+			$match: {
+				...(searchCond.length && { $and: searchCond }),
+				company: new mongoose.Types.ObjectId(user?.company),
+				isFutureLease: isFutureLease || false,
+			}
+		};
+
+		const lookupStage = [
+
+			// used to calculate the due amount
+			{
+				$lookup: {
+					from: COLLECTIONS.ledgers,
+					localField: "_id",
+					foreignField: "lease",
+					as: "ledgers"
+				}
+			},
+			{
+				$addFields: {
+					totalDue: {
+						$sum: {
+							$map: {
+								input: {
+									$filter: {
+										input: "$ledgers",
+										as: "ledger",
+										cond: {
+											$and: [
+												{ $lte: ["$$ledger.paymentDay", todayDate] },
+												{ $eq: ["$$ledger.isPaid", false] }
+											]
+										}
+									}
+								},
+								as: "balance",
+								in: "$$balance.balance"
+							}
+						}
+					}
+				}
+			},
+
+			// gets tenant information
+			{
+				$lookup: {
+					from: COLLECTIONS.users,
+					localField: REFERENCE.tenant,
+					foreignField: "_id",
+					as: "tenant"
+				}
+			},
+
+			// property info
+			{
+				$lookup: {
+					from: COLLECTIONS.properties,
+					localField: REFERENCE.property,
+					foreignField: "_id",
+					as: "property"
+				}
+			},
+
+			// unit info
+			{
+				$lookup: {
+					from: COLLECTIONS.units,
+					localField: REFERENCE.unit,
+					foreignField: "_id",
+					as: "unit"
+				}
+			},
+
+			// insert new fields
+			{
+				$addFields: {
+					tenant: { $arrayElemAt: ["$tenant", 0] },
+					property: { $arrayElemAt: ["$property", 0] },
+					unit: { $arrayElemAt: ["$unit", 0] }
+				}
+			}
+		];
+
+		const pipeline: any = [
+			matchStage,
+			...lookupStage,
+			{ $sort: filter?.sortBy ? { [filter?.sortBy]: filter?.sortOrder } : { _id: -1 } },
+			{ $skip: skip },
+			{ $limit: limit },
+			{
+				$project: {
+					name: 1,
+					email: 1,
+					propertyAddress: 1,
+					unitNumber: 1,
+					leaseStart: 1,
+					leaseEnd: 1,
+					totalDue: 1,
+					expiresIn: {
+						$divide: [
+							{
+								$subtract: [
+									{ $dateFromString: { dateString: "$leaseEnd" } },
+									{ $dateFromString: { dateString: todayDate } }
+								]
+							},
+							1000 * 60 * 60 * 24
+						]
+					},
+					tenant: {
+						_id: "$tenant._id",
+						name: "$tenant.name",
+						email: "$tenant.email"
+					},
+					property: {
+						_id: "$property._id",
+						address: "$property.address"
+					},
+					unit: {
+						_id: "$unit._id",
+						unitNumber: "$unit.unitNumber",
+						isOccupied: "$unit.isOccupied"
+					}
+				}
+			},
+			{
+				$facet: {
+					data: [
+						{ $sort: { _id: -1 } },
+						{ $skip: skip },
+						{ $limit: limit }
+					],
+					total: [
+						{ $count: "total" }
+					]
+				}
+			}
+		];
+
+		const res = await this.leaseModel.aggregate(pipeline).exec();
+		return {
+			data: res[0]?.data || [],
+			total: res[0]?.total[0]?.total || 0
+		};
+	}
 
 	// add lease function
 	async addLease(payload: AddLeaseDto, user: IFullUser): Promise<LeaseDocument | any> {
@@ -831,4 +1016,18 @@ export class LeaseService {
 			throw error;
 		}
 	}
+}
+
+interface IGetLeases {
+	propertyId: string | Types.ObjectId;
+	unitId: string | Types.ObjectId;
+	name: string;
+	email: string;
+	isFutureLease: boolean;
+	fromStart: string;
+	toStart: string;
+	fromEnd: string;
+	toEnd: string;
+	sortBy: string;
+	sortOrder: number
 }
