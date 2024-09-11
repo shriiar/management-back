@@ -10,19 +10,19 @@ export type LeaseDocument = Lease & Document;
 @Schema({ timestamps: true, autoIndex: true })
 export class Lease {
 
-	_id: string | mongoose.Types.ObjectId;
+	_id: string | mongoose.Types.ObjectId | string;
 
-	@Prop({ type: Date, required: true })
-	leaseStart: Date;
+	@Prop({ type: String, required: true })
+	leaseStart: string;
 
-	@Prop({ type: Date, required: true })
-	leaseEnd: Date;
+	@Prop({ type: String, required: true })
+	leaseEnd: string;
 
 	@Prop({ required: false, default: false })
 	isClosed: boolean;
 
 	@Prop({ required: false, default: false })
-	isFutureTenant: boolean;
+	isFutureLease: boolean;
 
 	@Prop({ required: false, default: false })
 	isEviction: boolean;

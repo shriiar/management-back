@@ -33,7 +33,7 @@ export class Ledger {
 	@Prop({ type: String, enum: Frequency, required: true })
 	frequency: Frequency;
 
-	@Prop({ type: String, required: false, default: false })
+	@Prop({ type: Boolean, required: false, default: false })
 	isPaid: boolean;
 
 	@Prop({ type: String, default: '' })

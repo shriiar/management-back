@@ -28,7 +28,7 @@ export class ProspectService {
 			session.startTransaction();
 
 			// aggregate in unit col for validation
-			const res = await this.unitModel.aggregate([
+			const [res] = await this.unitModel.aggregate([
 				// match unit and associated property, company
 				{
 					$match: {
@@ -98,7 +98,7 @@ export class ProspectService {
 					}
 				}
 			]).exec();
-			if (!res[0] || !res[0]?.company || !res[0]?.property) {
+			if (!res) {
 				throw new BadRequestException("Invalid request");
 			}
 

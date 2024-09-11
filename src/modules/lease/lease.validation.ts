@@ -5,14 +5,8 @@ import { AddUserDto } from "../users/users.validation";
 import { Frequency } from "./lease-ledger.model";
 import mongoose, { ObjectId } from "mongoose";
 
-export class RentChargeDto {
+export class RentDto {
 
-	// dp not use these values
-	_id?: mongoose.Types.ObjectId | string;
-	lease?: mongoose.Types.ObjectId | string
-
-
-	// starts from here --->
 	@ApiProperty({ example: 100 })
 	@IsNotEmpty({ message: 'Amount is required' })
 	@IsNumber({}, { message: 'Amount must be a number' })
@@ -57,8 +51,8 @@ export class AddLeaseDto {
 			]
 	})
 	@ValidateNested({ each: true })
-	@Type(() => RentChargeDto)
-	rentCharges: RentChargeDto[]
+	@Type(() => RentDto)
+	rents: RentDto[]
 
 	@ApiProperty({ example: AddUserDto })
 	@IsNotEmpty()
@@ -81,4 +75,26 @@ export class AddLeaseDto {
 	@IsNotEmpty({ message: 'Prospect is required' })
 	@IsMongoId({ message: 'Prospect must be a mongoDB ID' })
 	prospect: string
+}
+
+export class RenewLeaseDto {
+	@ApiProperty({ example: '2024-02-01' })
+	@IsString()
+	@IsNotEmpty()
+	leaseEnd: string
+
+	@ApiProperty({
+		example:
+			[
+				{ amount: 150, description: 'Renewed Lease', notes: 'Bla bla notes', frequency: 'monthly', paymentDay: 17 }
+			]
+	})
+	@ValidateNested({ each: true })
+	@Type(() => RentDto)
+	rents: RentDto[]
+
+	@ApiProperty({ example: '66df3d828e5529a5427ed725' })
+	@IsNotEmpty({ message: 'LeaseId is required' })
+	@IsMongoId({ message: 'LeaseId must be a mongoDB ID' })
+	leaseId: string
 }

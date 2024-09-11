@@ -5,52 +5,63 @@ import { IAddLeaseRes, ILease, ILedger, IRent } from "src/modules/lease/lease.in
 import { AddLeaseDto } from "src/modules/lease/lease.validation"
 import { IFullUser } from "src/modules/users/users.interface"
 import { getLastDayOfMonth, isValidDate } from "./dateHandler"
-import mongoose from "mongoose"
+import mongoose, { Types } from "mongoose"
 
-export function validateLedgerDate(res: IAddLeaseRes, lease: AddLeaseDto | Partial<ILease>) {
+export function validateLedgerDate(payload: {
+	leaseStart: string,
+	leaseEnd: string,
+	occupiedLease: Partial<ILease>,
+	futureLeases: Partial<ILease[]>
+}) {
+
+	const { leaseStart, leaseEnd, occupiedLease, futureLeases } = payload
 
 	// parse the lease start and end dates
-	const leaseStart = moment(lease?.leaseStart).startOf('day');
-	const leaseEnd = moment(lease?.leaseEnd).startOf('day');
+	const leaseStartDate = moment(leaseStart).startOf('day');
+	const leaseEndDate = moment(leaseEnd).startOf('day');
 
 	// Check for valid date range
-	if (!leaseStart.isBefore(leaseEnd)) {
+	if (!leaseStartDate.isBefore(leaseEndDate)) {
 		throw new BadRequestException('Invalid date range');
 	}
 
 	// check against currently occupied lease
-	const occupiedLease = res?.occupiedLease;
 	if (occupiedLease?._id) {
 		const occupiedStartDate = moment(occupiedLease.leaseStart).startOf('day');
 		const occupiedEndDate = moment(occupiedLease.leaseEnd).startOf('day');
 
 		// Validate if the new lease dates overlap with the occupied lease dates
-		if (leaseStart.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]') ||
-			leaseEnd.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]')) {
+		if (leaseStartDate.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]') ||
+			leaseEndDate.isBetween(occupiedStartDate, occupiedEndDate, undefined, '[]')) {
 			throw new BadRequestException('Selected dates overlap with an occupied lease. Please select another date range.');
 		}
 	}
 
 	// check against future leases
-	const futureLeases = res?.futureLeases || [];
 	futureLeases.forEach(futureLease => {
 		const futureStartDate = moment(futureLease.leaseStart).startOf('day');
 		const futureEndDate = moment(futureLease.leaseEnd).startOf('day');
 
 		// validate if the new lease dates overlap with any future lease dates
-		if (leaseStart.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
-			leaseEnd.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
-			leaseStart.isSameOrBefore(futureStartDate) && leaseEnd.isSameOrAfter(futureEndDate)) {
+		if (leaseStartDate.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
+			leaseEndDate.isBetween(futureStartDate, futureEndDate, undefined, '[]') ||
+			leaseStartDate.isSameOrBefore(futureStartDate) && leaseEndDate.isSameOrAfter(futureEndDate)) {
 			throw new BadRequestException('Selected dates overlap with a future lease. Please select another date range.');
 		}
 	});
 }
 
 export function populateLedgers(
-	payload: AddLeaseDto,
-	tenant: mongoose.Types.ObjectId | string,
-	lease: mongoose.Types.ObjectId | string,
-	company: mongoose.Types.ObjectId | string): Promise<{
+	payload: {
+		leaseStart: string,
+		leaseEnd: string,
+		rents: Partial<IRent[]>,
+		tenant: string | Types.ObjectId,
+		lease: string | Types.ObjectId,
+		unit: string | Types.ObjectId,
+		property: string | Types.ObjectId,
+		company: string | Types.ObjectId,
+	}): Promise<{
 		rents: Partial<IRent>[],
 		ledgers: Partial<ILedger>[]
 	}> {
@@ -64,7 +75,7 @@ export function populateLedgers(
 
 	const todayDate = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
 
-	payload?.rentCharges.forEach(rentCharge => {
+	payload?.rents.forEach(rentCharge => {
 
 		// assigniong new parent id to each rent charge
 		const rent = rentCharge?._id ? new mongoose.Types.ObjectId(rentCharge?._id) : new mongoose.Types.ObjectId();
@@ -72,11 +83,11 @@ export function populateLedgers(
 		rents.push({
 			...rentCharge,
 			_id: rent,
-			tenant: tenant ? new mongoose.Types.ObjectId(tenant) : null,
-			lease: new mongoose.Types.ObjectId(lease),
+			tenant: payload.tenant ? new mongoose.Types.ObjectId(payload.tenant) : null,
+			lease: new mongoose.Types.ObjectId(payload.lease),
 			unit: new mongoose.Types.ObjectId(payload?.unit),
 			property: new mongoose.Types.ObjectId(payload?.property),
-			company: new mongoose.Types.ObjectId(company),
+			company: new mongoose.Types.ObjectId(payload.company),
 		})
 
 		const paymentDay = rentCharge.paymentDay;
@@ -106,15 +117,21 @@ export function populateLedgers(
 				frequency: 'monthly',
 				isPaid: false,
 				rent: new mongoose.Types.ObjectId(rent),
-				tenant: tenant ? new mongoose.Types.ObjectId(tenant) : null,
-				lease: new mongoose.Types.ObjectId(lease),
+				tenant: payload.tenant ? new mongoose.Types.ObjectId(payload.tenant) : null,
+				lease: new mongoose.Types.ObjectId(payload.lease),
 				unit: new mongoose.Types.ObjectId(payload?.unit),
 				property: new mongoose.Types.ObjectId(payload?.property),
-				company: new mongoose.Types.ObjectId(company),
+				company: new mongoose.Types.ObjectId(payload.company),
 			};
 
 			ledgers.push(ledger);
 		});
+	});
+
+	ledgers.sort((a, b) => {
+		const dateA: any = new Date(a.paymentDay);
+		const dateB: any = new Date(b.paymentDay);
+		return dateA - dateB;
 	});
 
 	return Promise.resolve({ rents, ledgers });

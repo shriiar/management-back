@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { AddLeaseDto } from '../lease.validation';
+import { AddLeaseDto, RenewLeaseDto } from '../lease.validation';
 import { IFullUser } from 'src/modules/users/users.interface';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { User } from 'src/modules/users/users.model';
 import { Company } from 'src/modules/company/company.model';
-import mongoose, { Model } from 'mongoose';
+import mongoose, { Model, Types } from 'mongoose';
 import { Property } from 'src/modules/property/property.model';
 import { Unit } from 'src/modules/unit/unit.model';
 import { Prospect } from 'src/modules/prospect/prospect.model';
@@ -13,12 +13,12 @@ import * as moment from 'moment-timezone';
 import { DEFAULT_TIMEZONE } from 'src/common/config/timezone.config';
 import { isValidDate } from 'src/utils/dateHandler';
 import { populateLedgers, validateLedgerDate } from 'src/utils/leaseHandler';
-import { IAddLeaseRes } from '../lease.interface';
 import { CommonService } from 'src/common/services/common.service';
 import { Lease, LeaseDocument } from '../lease.model';
 import { Rent } from '../lease-rent.model';
 import { Ledger } from '../lease-ledger.model';
 import { USER_ROLE } from 'src/modules/users/users.constant';
+import { IRent } from '../lease.interface';
 
 @Injectable()
 export class LeaseService {
@@ -38,9 +38,195 @@ export class LeaseService {
 		private readonly commonService: CommonService
 	) { }
 
+	async getLeases(page: number, limit: number, filter: IGetLeases, user: IFullUser) {
+
+		page = page || 1;
+		limit = limit || 10;
+		const skip = (page - 1) * limit;
+
+		const todayDate = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
+
+		let { propertyId, unitId, name, email, isFutureLease, fromStart, toStart, fromEnd, toEnd } = filter;
+
+		if (fromStart && !toStart) {
+			toStart = todayDate;
+		}
+		if (fromEnd && !toEnd) {
+			toEnd = todayDate;
+		}
+
+		const searchCond: any[] = [];
+
+		if (fromStart && toStart) {
+			searchCond.push({ leaseStart: { $gte: fromStart, $lte: toStart } });
+		}
+		if (fromEnd && toEnd) {
+			searchCond.push({ leaseEnd: { $gte: fromEnd, $lte: toEnd } });
+		}
+		if (propertyId) {
+			searchCond.push({ propertyId: new mongoose.Types.ObjectId(propertyId) });
+		}
+		if (unitId) {
+			searchCond.push({ unitId: new mongoose.Types.ObjectId(unitId) });
+		}
+		if (name) {
+			searchCond.push({ "user.name": { $regex: name, $options: 'i' } });
+		}
+		if (email) {
+			searchCond.push({ "user.email": { $regex: email, $options: 'i' } });
+		}
+
+		const matchStage = {
+			$match: {
+				...(searchCond.length && { $and: searchCond }),
+				company: new mongoose.Types.ObjectId(user?.company),
+				isFutureLease: isFutureLease || false,
+			}
+		};
+
+		const lookupStage = [
+
+			// used to calculate the due amount
+			{
+				$lookup: {
+					from: COLLECTIONS.ledgers,
+					localField: "_id",
+					foreignField: "lease",
+					as: "ledgers"
+				}
+			},
+			{
+				$addFields: {
+					totalDue: {
+						$sum: {
+							$map: {
+								input: {
+									$filter: {
+										input: "$ledgers",
+										as: "ledger",
+										cond: {
+											$and: [
+												{ $lte: ["$$ledger.paymentDay", todayDate] },
+												{ $eq: ["$$ledger.isPaid", false] }
+											]
+										}
+									}
+								},
+								as: "balance",
+								in: "$$balance.balance"
+							}
+						}
+					}
+				}
+			},
+
+			// gets tenant information
+			{
+				$lookup: {
+					from: COLLECTIONS.users,
+					localField: REFERENCE.tenant,
+					foreignField: "_id",
+					as: "tenant"
+				}
+			},
+
+			// property info
+			{
+				$lookup: {
+					from: COLLECTIONS.properties,
+					localField: REFERENCE.property,
+					foreignField: "_id",
+					as: "property"
+				}
+			},
+
+			// unit info
+			{
+				$lookup: {
+					from: COLLECTIONS.units,
+					localField: REFERENCE.unit,
+					foreignField: "_id",
+					as: "unit"
+				}
+			},
+
+			// insert new fields
+			{
+				$addFields: {
+					tenant: { $arrayElemAt: ["$tenant", 0] },
+					property: { $arrayElemAt: ["$property", 0] },
+					unit: { $arrayElemAt: ["$unit", 0] }
+				}
+			}
+		];
+
+		const pipeline: any = [
+			matchStage,
+			...lookupStage,
+			{ $sort: filter?.sortBy ? { [filter?.sortBy]: filter?.sortOrder } : { _id: -1 } },
+			{ $skip: skip },
+			{ $limit: limit },
+			{
+				$project: {
+					name: 1,
+					email: 1,
+					propertyAddress: 1,
+					unitNumber: 1,
+					leaseStart: 1,
+					leaseEnd: 1,
+					totalDue: 1,
+					expiresIn: {
+						$divide: [
+							{
+								$subtract: [
+									{ $dateFromString: { dateString: "$leaseEnd" } },
+									{ $dateFromString: { dateString: todayDate } }
+								]
+							},
+							1000 * 60 * 60 * 24
+						]
+					},
+					tenant: {
+						_id: "$tenant._id",
+						name: "$tenant.name",
+						email: "$tenant.email"
+					},
+					property: {
+						_id: "$property._id",
+						address: "$property.address"
+					},
+					unit: {
+						_id: "$unit._id",
+						unitNumber: "$unit.unitNumber",
+						isOccupied: "$unit.isOccupied"
+					}
+				}
+			},
+			{
+				$facet: {
+					data: [
+						{ $sort: { _id: -1 } },
+						{ $skip: skip },
+						{ $limit: limit }
+					],
+					total: [
+						{ $count: "total" }
+					]
+				}
+			}
+		];
+
+		const res = await this.leaseModel.aggregate(pipeline).exec();
+		return {
+			data: res[0]?.data || [],
+			total: res[0]?.total[0]?.total || 0
+		};
+	}
+
+	// add lease function
 	async addLease(payload: AddLeaseDto, user: IFullUser): Promise<LeaseDocument | any> {
 
-		const { leaseStart, leaseEnd, rentCharges, property, unit, prospect, tenant } = payload;
+		const { leaseStart, leaseEnd, rents, property, unit, prospect, tenant } = payload;
 
 		// Start a session
 		const session = await this.connection.startSession();
@@ -49,7 +235,7 @@ export class LeaseService {
 			session.startTransaction();
 
 			// Fetch unit and associated data using aggregation
-			const [data] = await this.unitModel.aggregate([
+			const [res] = await this.unitModel.aggregate([
 				{
 					$match: {
 						_id: new mongoose.Types.ObjectId(unit),
@@ -57,17 +243,6 @@ export class LeaseService {
 						company: new mongoose.Types.ObjectId(user?.company),
 					}
 				},
-
-				// getting property 
-				{
-					$lookup: {
-						from: COLLECTIONS.properties,
-						localField: REFERENCE.property,
-						foreignField: "_id",
-						as: "property"
-					}
-				},
-				{ $unwind: "$property" },
 
 				// getting prospect
 				{
@@ -127,7 +302,6 @@ export class LeaseService {
 				// project stage
 				{
 					$project: {
-
 						// unit data
 						_id: 1,
 						isOccupied: 1,
@@ -135,12 +309,7 @@ export class LeaseService {
 						company: 1,
 						tenantHistories: 1,
 						tenant: 1,
-
-						// property data
-						property: {
-							_id: "$property._id",
-							occupiedUnits: "$property.occupiedUnits"
-						},
+						property: 1,
 
 						// occupied lease data if there is else null
 						occupiedLease: {
@@ -179,8 +348,8 @@ export class LeaseService {
 				}
 			]).exec();
 
-			if (!data) throw new BadRequestException('Invalid request');
-			if (!data?.prospect?.isApproved) throw new BadRequestException('The prospect is not approved yet. To assign it to a new unit, change the status to approved.');
+			if (!res) throw new BadRequestException('Invalid request');
+			if (!res?.prospect?.isApproved) throw new BadRequestException('The prospect is not approved yet. To assign it to a new unit, change the status to approved.');
 
 			// validate the dates
 			if (!isValidDate(leaseStart) || !isValidDate(leaseEnd)) throw new BadRequestException('Invalid date range');
@@ -197,7 +366,12 @@ export class LeaseService {
 			const isPast = leaseEnd < today;
 
 			// Validate the given date range
-			validateLedgerDate(data, payload);
+			validateLedgerDate({
+				leaseStart: leaseStart,
+				leaseEnd: leaseEnd,
+				occupiedLease: res?.occupiedLease || null,
+				futureLeases: res?.futureLeases || []
+			});
 
 			// Tenant operations if in present or future
 			let tenantId = null;
@@ -229,7 +403,17 @@ export class LeaseService {
 
 			// Lease and rent operations
 			const leaseId = new mongoose.Types.ObjectId();
-			const { ledgers, rents } = await populateLedgers(payload, tenantId, leaseId, user?.company);
+
+			const { ledgers, rents } = await populateLedgers({
+				leaseStart: leaseStart,
+				leaseEnd: leaseEnd,
+				rents: payload.rents as IRent[],
+				tenant: tenantId,
+				lease: leaseId,
+				unit: unit,
+				property: property,
+				company: user?.company
+			});
 
 			// Insert rents and (if necessary) ledgers
 			await Promise.all([
@@ -239,17 +423,21 @@ export class LeaseService {
 
 			// Update property and unit if necessary
 			if (!isPast && !isFuture) {
-				await this.propertyModel.updateOne({ _id: new mongoose.Types.ObjectId(property) }, { $inc: { occupiedUnits: 1 } }, { session });
-			}
+				await this.propertyModel.updateOne(
+					{ _id: new mongoose.Types.ObjectId(property) },
+					{ $inc: { occupiedUnits: 1 } },
+					{ session }
+				)
+			};
 
 			// update unit
 			await this.unitModel.updateOne(
 				{ _id: new mongoose.Types.ObjectId(unit) },
 				{
 					$set: {
-						isOccupied: (isFuture || isPast) ? data?.isOccupied : true,
-						lease: (isFuture || isPast) ? data?.lease : leaseId,
-						tenant: (isFuture || isPast) ? data?.tenant : tenantId,
+						isOccupied: (isFuture || isPast) ? res?.isOccupied : true,
+						lease: (isFuture || isPast) ? res?.lease : leaseId,
+						tenant: (isFuture || isPast) ? res?.tenant : tenantId,
 					},
 					$push: {
 						...(isFuture && { futureLeases: leaseId }),
@@ -265,15 +453,15 @@ export class LeaseService {
 			// Create and save new lease
 			const newLease = new this.leaseModel({
 				_id: leaseId,
-				leaseStart: payload.leaseStart,
-				leaseEnd: payload.leaseEnd,
+				leaseStart: leaseStart,
+				leaseEnd: leaseEnd,
 				rents,
 				ledgers: !isFuture ? ledgers : [],
-				isFutureTenant: !!isFuture,
+				isFutureLease: !!isFuture,
 				isClosed: !!isPast,
 				tenant: tenantId,
-				unit: new mongoose.Types.ObjectId(payload.unit),
-				property: new mongoose.Types.ObjectId(payload.property),
+				unit: new mongoose.Types.ObjectId(unit),
+				property: new mongoose.Types.ObjectId(property),
 				company: new mongoose.Types.ObjectId(user?.company),
 			});
 
@@ -292,4 +480,554 @@ export class LeaseService {
 		}
 	}
 
+	// start lease function for FUTURE LEASE
+	async startLease(leaseId: string, user: IFullUser): Promise<LeaseDocument> {
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						"_id": new mongoose.Types.ObjectId(leaseId),
+						"company": new mongoose.Types.ObjectId(user?.company),
+						"isFutureLease": true
+					}
+				},
+
+				// rent lookup
+				{
+					$lookup: {
+						from: COLLECTIONS.rents,
+						localField: REFERENCE.rents,
+						foreignField: "_id",
+						as: "rents"
+					}
+				},
+				// Add fields stage to directly extract the rents data
+				{
+					$addFields: {
+						rents: {
+							$cond: {
+								if: { $isArray: "$rents" },
+								then: {
+									$map: {
+										input: "$rents",  // Process rents array
+										as: "rent",
+										in: {
+											_id: "$$rent._id",
+											description: "$$rent.description",
+											amount: "$$rent.amount",
+											paymentDay: "$$rent.paymentDay"
+										}
+									}
+								},
+								else: []
+							}
+						}
+					}
+				},
+
+				// unit lookup
+				{
+					$lookup: {
+						from: COLLECTIONS.units,
+						localField: REFERENCE.unit,
+						foreignField: "_id",
+						as: "unit"
+					}
+				},
+				{ $unwind: "$unit" },
+
+				// match stage
+				{
+					$match: {
+						"unit.futureLeases": { $in: [new mongoose.Types.ObjectId(leaseId)] },
+					}
+				},
+
+				// project stage
+				{
+					$project: {
+
+						// local fields
+						_id: 1,
+						leaseStart: 1,
+						leaseEnd: 1,
+						tenant: 1,
+						property: 1,
+
+						// aggregate fields
+						unit: {
+							_id: "$unit._id",
+							isOccupied: "$unit.isOccupied",
+						},
+						rents: 1,
+					}
+				}
+			]).exec();
+
+			if (!res) {
+				throw new BadRequestException("Invalid request");
+			}
+
+			if (res.unit.isOccupied) {
+				throw new BadRequestException('The unit is already occupied by another tenant');
+			}
+
+			const today = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
+			const leaseEnd = res?.leaseEnd;
+
+			// For now we can start the lease when ever we want
+			// if (leaseStart > today) {
+			// 	throw new BadRequestException('Lease start date is in future. You cant start the lease for a future tenant');
+			// }
+
+			if (leaseEnd < today) {
+				throw new BadRequestException('Lease end date for this tenant has passed. You can not start the lease');
+			}
+
+			const { ledgers, rents } = await populateLedgers({
+				leaseStart: today,
+				leaseEnd: res.leaseEnd,
+				rents: res.rents,
+				tenant: res.tenant,
+				lease: res._id,
+				unit: res.unit._id,
+				property: res.property,
+				company: user?.company
+			});
+
+			// adding ledgers to the ledger collection
+			this.ledgerModel.insertMany(ledgers, { session, ordered: false });
+
+			// update property
+			await this.propertyModel.updateOne(
+				{ _id: res.property },
+				{ $inc: { occupiedUnits: 1 } },
+				{ session }
+			);
+
+			// update unit
+			await this.unitModel.updateOne(
+				{ _id: res.unit._id },
+				{
+					$set: {
+						isOccupied: true,
+						lease: new mongoose.Types.ObjectId(leaseId),
+						tenant: res.tenant
+					},
+					$pull: {
+						futureLeases: new mongoose.Types.ObjectId(leaseId),
+					}
+				},
+				{ session }
+			);
+
+			// update lease
+			const savedLease = await this.leaseModel.findOneAndUpdate(
+				{ _id: res._id },
+				{
+					$set: {
+						leaseStart: today,
+						isFutureLease: false,
+						ledgers: ledgers,
+					}
+				},
+				{ session }
+			);
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return savedLease;
+
+		} catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+	}
+
+	// renew lease function
+	async renewLease(payload: RenewLeaseDto, user: IFullUser): Promise<LeaseDocument> {
+
+		const { leaseId, leaseEnd } = payload;
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			// validating lease date
+			if (!isValidDate(leaseEnd)) {
+				throw new BadRequestException('Invalid lease end date')
+			}
+
+			// lease end date must be last day of the given month
+			const lastDayOfMonth = moment(leaseEnd).endOf('month').format('YYYY-MM-DD')
+			if (lastDayOfMonth !== leaseEnd) {
+				throw new BadRequestException('Lease end date must be last day of the given month')
+			}
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						"_id": new mongoose.Types.ObjectId(leaseId),
+						"company": new mongoose.Types.ObjectId(user?.company),
+						"isEviction": false,
+						"isClosed": false,
+						"isFutureLease": false
+					}
+				},
+
+				// get associated unit
+				{
+					$lookup: {
+						from: COLLECTIONS.units,
+						localField: "unit",
+						foreignField: "_id",
+						as: "unitData"
+					}
+				},
+				{ $unwind: "$unitData" },
+
+				// for the assocaited unit get future leases
+				{
+					$lookup: {
+						from: COLLECTIONS.leases,
+						localField: "unitData.futureLeases",
+						foreignField: "_id",
+						as: "futureLeases"
+					}
+				},
+				{
+					$project: {
+						_id: 1,
+						leaseStart: 1,
+						leaseEnd: 1,
+						tenant: 1,
+						unit: 1,
+						property: 1,
+						futureLeases: {
+							$map: {
+								input: "$futureLeases",
+								as: "futureLease",
+								in: {
+									_id: "$$futureLease._id",
+									leaseStart: "$$futureLease.leaseStart",
+									leaseEnd: "$$futureLease.leaseEnd"
+								}
+							}
+						},
+					}
+				}
+			]).exec();
+			if (!res) {
+				throw new BadRequestException('Invalid request')
+			}
+
+			const newLeaseEnd = leaseEnd;
+			const newLeaseStart = moment(res?.leaseEnd).add(1, 'day').format('YYYY-MM-DD');
+			const prevLeaseEnd = res?.leaseEnd;
+
+			if (newLeaseEnd <= prevLeaseEnd) {
+				throw new BadRequestException('Given lease end must be greater than the current lease end date');
+			}
+
+			// Validate the given date range
+			validateLedgerDate({
+				leaseStart: newLeaseStart,
+				leaseEnd: newLeaseEnd,
+				occupiedLease: res?.occupiedLease || null,
+				futureLeases: res?.futureLeases || []
+			});
+
+			const { ledgers, rents } = await populateLedgers({
+				leaseStart: newLeaseStart,
+				leaseEnd: newLeaseEnd,
+				rents: payload.rents as Partial<IRent[]>,
+				tenant: res.tenant,
+				lease: res._id,
+				unit: res.unit,
+				property: res.property,
+				company: user?.company
+			});
+
+			// Insert rents and ledgers
+			await Promise.all([
+				this.ledgerModel.insertMany(ledgers, { session, ordered: false }),
+				this.rentModel.insertMany(rents, { session, ordered: false })
+			]);
+
+			// update lease
+			const savedLease = await this.leaseModel.findOneAndUpdate(
+				{ _id: res._id },
+				{
+					$set: {
+						leaseEnd: newLeaseEnd,
+					},
+					$push: {
+						rents: { $each: rents },
+						ledgers: { $each: ledgers }
+					}
+				},
+				{ session }
+			);
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return savedLease;
+		}
+		catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+	}
+
+	// end current lease
+	async endLease(leaseId: string, user: IFullUser) {
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						_id: new mongoose.Types.ObjectId(leaseId),
+						company: new mongoose.Types.ObjectId(user?.company),
+						isClosed: false,
+						isFutureLease: false,
+						isEviction: false
+					}
+				},
+
+				// project stage
+				{
+					$project: {
+						_id: 1,
+						tenant: 1,
+						unit: 1,
+						property: 1,
+						company: 1,
+					}
+				}
+			]).exec();
+			if (!res) {
+				throw new BadRequestException("Invalid request");
+			}
+
+			// Removing all the rents and ledgers
+			const deleteResults = await Promise.all([
+				this.ledgerModel.deleteMany({ lease: new mongoose.Types.ObjectId(leaseId) }, { session }),
+				this.rentModel.deleteMany({ lease: new mongoose.Types.ObjectId(leaseId) }, { session })
+			]);
+			deleteResults.forEach(result => {
+				if (result.deletedCount === 0) {
+					throw new BadRequestException("Failed to delete rents or ledgers");
+				}
+			});
+
+			// Update property
+			const propertyUpdateResult = await this.propertyModel.updateOne(
+				{ _id: res.property },
+				{ $inc: { occupiedUnits: -1 } },
+				{ session }
+			);
+			if (propertyUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update property");
+			}
+
+			// Update unit
+			const unitUpdateResult = await this.unitModel.updateOne(
+				{ _id: res.unit },
+				{
+					$set: {
+						isOccupied: false,
+						lease: null,
+						tenant: null
+					}
+				},
+				{ session }
+			);
+			if (unitUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update unit");
+			}
+
+			// Remove tenant
+			const tenantDeleteResult = await this.userModel.deleteOne(
+				{ _id: res.tenant },
+				{ session }
+			);
+			if (tenantDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete tenant");
+			}
+
+			// Update company to remove tenant
+			const companyUpdateResult = await this.companyModel.updateOne(
+				{ _id: res.company },
+				{
+					$pull: {
+						users: res.tenant,
+					}
+				},
+				{ session }
+			);
+			if (companyUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update company");
+			}
+
+			// Remove lease
+			const leaseDeleteResult = await this.leaseModel.deleteOne(
+				{ _id: new mongoose.Types.ObjectId(leaseId) },
+				{ session }
+			);
+			if (leaseDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete lease");
+			}
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return;
+		}
+		catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+
+	}
+
+	// cancel move in for future tenant
+	async cancelMoveIn(leaseId: string, user: IFullUser) {
+
+		// Start a session
+		const session = await this.connection.startSession();
+		try {
+			// Start transaction
+			session.startTransaction();
+
+			const [res] = await this.leaseModel.aggregate([
+				{
+					$match: {
+						_id: new mongoose.Types.ObjectId(leaseId),
+						company: new mongoose.Types.ObjectId(user?.company),
+						isClosed: false,
+						isFutureLease: true
+					}
+				},
+
+				// project stage
+				{
+					$project: {
+						_id: 1,
+						tenant: 1,
+						unit: 1,
+						property: 1,
+						company: 1,
+					}
+				}
+			]).exec();
+			if (!res) {
+				throw new BadRequestException("Invalid request");
+			}
+
+			// Remove rents
+			const rentDeleteResult = await this.rentModel.deleteMany(
+				{ lease: new mongoose.Types.ObjectId(leaseId) },
+				{ session }
+			);
+			if (rentDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("No rents were deleted for this lease.");
+			}
+
+			// Update unit
+			const unitUpdateResult = await this.unitModel.updateOne(
+				{ _id: res.unit },
+				{
+					$pull: {
+						futureLeases: new mongoose.Types.ObjectId(leaseId),
+					}
+				},
+				{ session }
+			);
+			if (unitUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update unit");
+			}
+
+			// Remove tenant
+			const tenantDeleteResult = await this.userModel.deleteOne(
+				{ _id: res.tenant },
+				{ session }
+			);
+			if (tenantDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete tenant");
+			}
+
+			// Update company to remove tenant
+			const companyUpdateResult = await this.companyModel.updateOne(
+				{ _id: res.company },
+				{
+					$pull: {
+						users: res.tenant,
+					}
+				},
+				{ session }
+			);
+			if (companyUpdateResult.modifiedCount === 0) {
+				throw new BadRequestException("Failed to update company");
+			}
+
+			// Remove lease
+			const leaseDeleteResult = await this.leaseModel.deleteOne(
+				{ _id: new mongoose.Types.ObjectId(leaseId) },
+				{ session }
+			);
+			if (leaseDeleteResult.deletedCount === 0) {
+				throw new BadRequestException("Failed to delete lease");
+			}
+
+			// Commit the transaction
+			await session.commitTransaction();
+			session.endSession();
+
+			return;
+		}
+		catch (error) {
+			// Abort the transaction in case of an error
+			await session.abortTransaction();
+			session.endSession();
+			throw error;
+		}
+	}
+}
+
+interface IGetLeases {
+	propertyId: string | Types.ObjectId;
+	unitId: string | Types.ObjectId;
+	name: string;
+	email: string;
+	isFutureLease: boolean;
+	fromStart: string;
+	toStart: string;
+	fromEnd: string;
+	toEnd: string;
+	sortBy: string;
+	sortOrder: number
 }
