@@ -4,6 +4,14 @@ import { Company } from '../company/company.model';
 import { Property } from '../property/property.model';
 import { Unit } from '../unit/unit.model';
 
+export enum LeaseStatus {
+	ACTIVE = 'active',
+	INACTIVE = 'inactive',
+	TERMINATED = 'terminated',
+	PENDING = 'pending',
+	LEGAL = 'legal',
+}
+
 export interface ILedger {
 	_id: string | Types.ObjectId;
 	paymentDay: string;

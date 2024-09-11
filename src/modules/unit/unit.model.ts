@@ -48,7 +48,7 @@ export class Unit {
 		required: false,
 		default: [],
 	})
-	tenantHistories: mongoose.Types.ObjectId[] | string[];
+	leaseHistories: mongoose.Types.ObjectId[] | string[];
 
 	@Prop({
 		required: false,

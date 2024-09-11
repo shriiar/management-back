@@ -4,6 +4,7 @@ import { User } from '../users/users.model';
 import { Company } from '../company/company.model';
 import { Property } from '../property/property.model';
 import { Unit } from '../unit/unit.model';
+import { LeaseStatus } from './lease.interface';
 
 export type LeaseDocument = Lease & Document;
 
@@ -17,6 +18,14 @@ export class Lease {
 
 	@Prop({ type: String, required: true })
 	leaseEnd: string;
+
+	@Prop({
+		type: String,
+		enum: LeaseStatus,
+		required: true,
+		default: LeaseStatus.PENDING,
+	})
+	status: LeaseStatus;
 
 	@Prop({ required: false, default: false })
 	isClosed: boolean;
@@ -43,6 +52,19 @@ export class Lease {
 		default: [],
 	})
 	ledgers: mongoose.Types.ObjectId[] | string[];
+
+	// to store tenant info once lease is closed/inactive
+	@Prop({
+		type: {
+			name: { type: String, required: false },
+			email: { type: String, required: false },
+		},
+		default: null
+	})
+	tenantRecord: {
+		name?: string;
+		email?: string;
+	} | null;
 
 	@Prop({
 		required: false,
