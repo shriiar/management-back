@@ -17,6 +17,7 @@ import { LeaseModule } from './modules/lease/lease.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronModule } from './modules/cron/cron.module';
 import { CronLeaseService } from './modules/cron/services/cron-lease.service';
+import { ExpenseModule } from './modules/expense/expense.module';
 
 @Module({
 	imports: [
@@ -36,6 +37,7 @@ import { CronLeaseService } from './modules/cron/services/cron-lease.service';
 		TenantModule,
 		LeaseModule,
 		CronModule,
+		ExpenseModule,
 	],
 	controllers: [],
 	providers: [Logger],

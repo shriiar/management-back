@@ -22,4 +22,6 @@ export const REFERENCE = {
 	admin: 'admin',
 	user: 'user',
 	tenant: 'tenant',
+	addedBy: 'addedBy',
+	approvedBy: 'approvedBy'
 }

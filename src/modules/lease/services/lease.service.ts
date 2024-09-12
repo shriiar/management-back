@@ -1049,5 +1049,5 @@ interface IGetLeases {
 	fromEnd: string;
 	toEnd: string;
 	sortBy: string;
-	sortOrder: number
+	sortOrder: number;
 }
