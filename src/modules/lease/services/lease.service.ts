@@ -18,7 +18,7 @@ import { Lease, LeaseDocument } from '../lease.model';
 import { Rent } from '../lease-rent.model';
 import { Ledger } from '../lease-ledger.model';
 import { USER_ROLE } from 'src/modules/users/users.constant';
-import { IRent } from '../lease.interface';
+import { IRent, LeaseStatus } from '../lease.interface';
 
 @Injectable()
 export class LeaseService {
@@ -307,7 +307,7 @@ export class LeaseService {
 						isOccupied: 1,
 						lease: 1,
 						company: 1,
-						tenantHistories: 1,
+						leaseHistories: 1,
 						tenant: 1,
 						property: 1,
 
@@ -441,7 +441,7 @@ export class LeaseService {
 					},
 					$push: {
 						...(isFuture && { futureLeases: leaseId }),
-						...(isPast && { tenantHistories: leaseId })
+						...(isPast && { leaseHistories: leaseId })
 					}
 				},
 				{ session }
@@ -455,6 +455,7 @@ export class LeaseService {
 				_id: leaseId,
 				leaseStart: leaseStart,
 				leaseEnd: leaseEnd,
+				status: (!isFuture && !isPast) ? LeaseStatus.ACTIVE : ((isPast) ? LeaseStatus.INACTIVE : LeaseStatus.PENDING),
 				rents,
 				ledgers: !isFuture ? ledgers : [],
 				isFutureLease: !!isFuture,
@@ -635,6 +636,7 @@ export class LeaseService {
 						leaseStart: today,
 						isFutureLease: false,
 						ledgers: ledgers,
+						status: LeaseStatus.ACTIVE
 					}
 				},
 				{ session }
@@ -815,6 +817,17 @@ export class LeaseService {
 					}
 				},
 
+				// get associated tenant
+				{
+					$lookup: {
+						from: COLLECTIONS.users,
+						localField: REFERENCE.tenant,
+						foreignField: "_id",
+						as: "tenantData"
+					}
+				},
+				{ $unwind: "$tenantData" },
+
 				// project stage
 				{
 					$project: {
@@ -823,6 +836,12 @@ export class LeaseService {
 						unit: 1,
 						property: 1,
 						company: 1,
+
+						// aggregated fields
+						tenantData: {
+							name: "$tenantData.name",
+							email: "$tenantData.email"
+						}
 					}
 				}
 			]).exec();
@@ -830,16 +849,6 @@ export class LeaseService {
 				throw new BadRequestException("Invalid request");
 			}
 
-			// Removing all the rents and ledgers
-			const deleteResults = await Promise.all([
-				this.ledgerModel.deleteMany({ lease: new mongoose.Types.ObjectId(leaseId) }, { session }),
-				this.rentModel.deleteMany({ lease: new mongoose.Types.ObjectId(leaseId) }, { session })
-			]);
-			deleteResults.forEach(result => {
-				if (result.deletedCount === 0) {
-					throw new BadRequestException("Failed to delete rents or ledgers");
-				}
-			});
 
 			// Update property
 			const propertyUpdateResult = await this.propertyModel.updateOne(
@@ -859,6 +868,9 @@ export class LeaseService {
 						isOccupied: false,
 						lease: null,
 						tenant: null
+					},
+					$push: {
+						leaseHistories: res._id,
 					}
 				},
 				{ session }
@@ -890,14 +902,22 @@ export class LeaseService {
 				throw new BadRequestException("Failed to update company");
 			}
 
-			// Remove lease
-			const leaseDeleteResult = await this.leaseModel.deleteOne(
-				{ _id: new mongoose.Types.ObjectId(leaseId) },
+			// update lease to make it inactive
+			const savedLease = await this.leaseModel.findOneAndUpdate(
+				{ _id: res._id },
+				{
+					$set: {
+						isClosed: true,
+						status: LeaseStatus.INACTIVE,
+						tenant: null,
+						tenantRecord: {
+							name: res?.tenantData?.name,
+							email: res?.tenantData?.email
+						}
+					},
+				},
 				{ session }
 			);
-			if (leaseDeleteResult.deletedCount === 0) {
-				throw new BadRequestException("Failed to delete lease");
-			}
 
 			// Commit the transaction
 			await session.commitTransaction();
@@ -1029,5 +1049,5 @@ interface IGetLeases {
 	fromEnd: string;
 	toEnd: string;
 	sortBy: string;
-	sortOrder: number
+	sortOrder: number;
 }

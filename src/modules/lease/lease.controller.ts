@@ -20,7 +20,6 @@ export class LeaseController {
 		private readonly leaseService: LeaseService
 	) { }
 
-	// Tenant
 	@Get('partial-tenants')
 	@UseGuards(RolesGuard)
 	@Roles(USER_ROLE.manager)

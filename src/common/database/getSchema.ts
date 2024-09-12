@@ -1,5 +1,6 @@
 import { ModelDefinition } from "@nestjs/mongoose";
 import { Company, CompanySchema } from "src/modules/company/company.model";
+import { Expense, ExpenseSchema } from "src/modules/expense/expense.model";
 import { Ledger, LedgerSchema } from "src/modules/lease/lease-ledger.model";
 import { Rent, RentSchema } from "src/modules/lease/lease-rent.model";
 import { Lease, LeaseSchema } from "src/modules/lease/lease.model";
@@ -47,6 +48,11 @@ const models = {
 	'Ledger': {
 		name: Ledger.name,
 		schema: LedgerSchema
+	},
+
+	'Expense': {
+		name: Expense.name,
+		schema: ExpenseSchema
 	},
 }
 
