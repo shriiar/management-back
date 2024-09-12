@@ -8,6 +8,13 @@ import { LeaseStatus } from './lease.interface';
 
 export type LeaseDocument = Lease & Document;
 
+@Schema({ timestamps: false, _id: false })
+class Cardknox {
+	@Prop({ type: String, default: '' })
+	customer: string;
+}
+const CardknoxSchema = SchemaFactory.createForClass(Cardknox);
+
 @Schema({ timestamps: true, autoIndex: true })
 export class Lease {
 
@@ -52,6 +59,9 @@ export class Lease {
 		default: [],
 	})
 	ledgers: mongoose.Types.ObjectId[] | string[];
+
+	@Prop({ type: CardknoxSchema, default: { customer: '' } })
+	cardknox: Cardknox;
 
 	// to store tenant info once lease is closed/inactive
 	@Prop({

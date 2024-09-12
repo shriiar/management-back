@@ -19,6 +19,7 @@ import { Rent } from '../lease-rent.model';
 import { Ledger } from '../lease-ledger.model';
 import { USER_ROLE } from 'src/modules/users/users.constant';
 import { IRent, LeaseStatus } from '../lease.interface';
+import { PaymentService } from 'src/modules/payment/services/payment.service';
 
 @Injectable()
 export class LeaseService {
@@ -35,7 +36,8 @@ export class LeaseService {
 		@InjectConnection() private readonly connection: mongoose.Connection,
 
 		// services
-		private readonly commonService: CommonService
+		private readonly commonService: CommonService,
+		private readonly paymentService: PaymentService,
 	) { }
 
 	async getLeases(page: number, limit: number, filter: IGetLeases, user: IFullUser) {
@@ -448,7 +450,13 @@ export class LeaseService {
 			);
 
 			// remove the prospect as we have converted it to a lease and tenant
-			await this.prospectModel.deleteOne({ _id: new mongoose.Types.ObjectId(prospect) });
+			await this.prospectModel.deleteOne({ _id: new mongoose.Types.ObjectId(prospect) }, { session });
+
+			// create a customer for new lease in cardknox
+			const customer: string = !isPast ? await this.paymentService.createCustomer({
+				name: tenant.name,
+				email: tenant.email,
+			}) : '';
 
 			// Create and save new lease
 			const newLease = new this.leaseModel({
@@ -460,6 +468,7 @@ export class LeaseService {
 				ledgers: !isFuture ? ledgers : [],
 				isFutureLease: !!isFuture,
 				isClosed: !!isPast,
+				cardknox: !isPast ? { customer: customer } : { customer: '' },
 				tenant: tenantId,
 				unit: new mongoose.Types.ObjectId(unit),
 				property: new mongoose.Types.ObjectId(property),

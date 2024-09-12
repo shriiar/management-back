@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { AddExpenseDto } from './expense.validation';
-import { IFullUser } from '../users/users.interface';
-import { Property } from '../property/property.model';
-import { Unit } from '../unit/unit.model';
+import { AddExpenseDto } from '../expense.validation';
+import { IFullUser } from '../../users/users.interface';
+import { Property } from '../../property/property.model';
+import { Unit } from '../../unit/unit.model';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
-import { Expense } from './expense.model';
+import { Expense } from '../expense.model';
 import * as moment from 'moment-timezone'
 import { isValidDate } from 'src/utils/dateHandler';
 import { DEFAULT_TIMEZONE } from 'src/common/config/timezone.config';
