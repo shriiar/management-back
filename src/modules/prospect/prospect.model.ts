@@ -36,7 +36,6 @@ export class Prospect {
 
 	@Prop({
 		required: true,
-		default: null,
 		unique: false,
 		ref: 'Property',
 		type: mongoose.Schema.Types.ObjectId,
@@ -45,7 +44,6 @@ export class Prospect {
 
 	@Prop({
 		required: true,
-		default: null,
 		unique: false,
 		ref: 'Unit',
 		type: mongoose.Schema.Types.ObjectId,

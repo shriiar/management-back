@@ -391,7 +391,8 @@ export class LeaseService {
 					name: tenant.name,
 					email: tenant.email,
 					password: tenant.password,
-					role: USER_ROLE.tenant
+					role: USER_ROLE.tenant,
+					company: user?.company
 				});
 				const savedUser = await newUser.save({ session });
 

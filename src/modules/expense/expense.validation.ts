@@ -21,7 +21,7 @@ export class AddExpenseDto {
 	@ApiProperty({ example: 'Bla bla notes' })
 	@IsString()
 	@IsOptional()
-	notes: string;
+	note: string;
 
 	@ApiProperty({ example: true })
 	@IsBoolean()

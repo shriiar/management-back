@@ -13,12 +13,12 @@ export class AddProspectDto {
 	@IsLowercase({ message: 'Email must be lowercase' })
 	email: string;
 
-	@ApiProperty({ example: '64cbc171f5212ee891018701' })
+	@ApiProperty({ example: '66e35300b56f090d245a291e' })
 	@IsNotEmpty({ message: 'Property is required' })
 	@IsMongoId({message: 'Property must be a mongoDB ID'})
 	property: string
 
-	@ApiProperty({ example: '64cbc171f5212ee891018701' })
+	@ApiProperty({ example: '66e3533bb56f090d245a2930' })
 	@IsNotEmpty({ message: 'Unit is required' })
 	@IsMongoId({message: 'Unit must be a mongoDB ID'})
 	unit: string

@@ -4,6 +4,8 @@ import { User } from '../users/users.model';
 import { Company } from '../company/company.model';
 import { Property } from '../property/property.model';
 import { Lease } from '../lease/lease.model';
+import { Expense } from '../expense/expense.model';
+import { Income } from '../income/income.model';
 
 export type UnitDocument = Unit & Document;
 
@@ -27,11 +29,19 @@ export class Unit {
 	@Prop({ type: Number, required: true })
 	bathroom: number;
 
-	@Prop({ required: false, default: [] })
-	incomePerMonth: [];
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Income' }],
+		required: false,
+		default: [],
+	})
+	incomePerMonth: mongoose.Types.ObjectId[] | Income[];
 
-	@Prop({ required: false, default: [] })
-	expensePerMonth: [];
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Expense' }],
+		required: false,
+		default: [],
+	})
+	expensePerMonth: mongoose.Types.ObjectId[] | Expense[];
 
 	@Prop({ required: false, default: false })
 	isOccupied: boolean;
@@ -41,14 +51,14 @@ export class Unit {
 		required: false,
 		default: [],
 	})
-	futureLeases: mongoose.Types.ObjectId[] | string[];
+	futureLeases: mongoose.Types.ObjectId[] | Lease[];
 
 	@Prop({
 		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lease' }],
 		required: false,
 		default: [],
 	})
-	leaseHistories: mongoose.Types.ObjectId[] | string[];
+	leaseHistories: mongoose.Types.ObjectId[] | Lease[];
 
 	@Prop({
 		required: false,

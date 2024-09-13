@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { User } from '../users/users.model';
+import { Property } from '../property/property.model';
+import { Unit } from '../unit/unit.model';
 
 export type CompanyDocument = Company & Document;
 
@@ -41,21 +43,21 @@ export class Company {
 		required: false,
 		default: [],
 	})
-	users: mongoose.Types.ObjectId[] | string[];
+	users: mongoose.Types.ObjectId[] | User[];
 
 	@Prop({
 		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Property' }],
 		required: false,
 		default: [],
 	})
-	properties: mongoose.Types.ObjectId[] | string[];
+	properties: mongoose.Types.ObjectId[] | Property[];
 
 	@Prop({
 		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Unit' }],
 		required: false,
 		default: [],
 	})
-	units: mongoose.Types.ObjectId[] | string[];
+	units: mongoose.Types.ObjectId[] | Unit[];
 
 	@Prop({ required: false, default: null })
 	imageUrl?: string;
