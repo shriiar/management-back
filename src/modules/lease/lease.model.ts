@@ -5,8 +5,17 @@ import { Company } from '../company/company.model';
 import { Property } from '../property/property.model';
 import { Unit } from '../unit/unit.model';
 import { LeaseStatus } from './lease.interface';
+import { Rent } from './lease-rent.model';
+import { Ledger } from './lease-ledger.model';
 
 export type LeaseDocument = Lease & Document;
+
+@Schema({ timestamps: false, _id: false })
+class Cardknox {
+	@Prop({ type: String, default: '' })
+	customer: string;
+}
+const CardknoxSchema = SchemaFactory.createForClass(Cardknox);
 
 @Schema({ timestamps: true, autoIndex: true })
 export class Lease {
@@ -44,14 +53,17 @@ export class Lease {
 		required: false,
 		default: [],
 	})
-	rents: mongoose.Types.ObjectId[] | string[];
+	rents: mongoose.Types.ObjectId[] | Rent[];
 
 	@Prop({
 		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Ledger' }],
 		required: false,
 		default: [],
 	})
-	ledgers: mongoose.Types.ObjectId[] | string[];
+	ledgers: mongoose.Types.ObjectId[] | Ledger[];
+
+	@Prop({ type: CardknoxSchema, default: { customer: '' } })
+	cardknox: Cardknox;
 
 	// to store tenant info once lease is closed/inactive
 	@Prop({
@@ -67,7 +79,7 @@ export class Lease {
 	} | null;
 
 	@Prop({
-		required: false,
+		required: true,
 		ref: 'User',
 		type: mongoose.Schema.Types.ObjectId,
 	})

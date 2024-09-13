@@ -2,6 +2,9 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { Document } from 'mongoose';
 import { User } from '../users/users.model';
 import { Company } from '../company/company.model';
+import { Unit } from '../unit/unit.model';
+import { Income } from '../income/income.model';
+import { Expense } from '../expense/expense.model';
 
 export type PropertyDocument = Property & Document;
 
@@ -30,26 +33,34 @@ export class Property {
 	occupiedUnits: number;
 
 	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Income' }],
 		required: false,
-		default: null,
-		unique: false,
-		ref: 'Company',
-		type: mongoose.Schema.Types.ObjectId,
+		default: [],
 	})
-	company: Company;
+	incomePerMonth: mongoose.Types.ObjectId[] | Income[];
+
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Expense' }],
+		required: false,
+		default: [],
+	})
+	expensePerMonth: mongoose.Types.ObjectId[] | Expense[];
 
 	@Prop({
 		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Unit' }],
 		required: false,
 		default: [],
 	})
-	units: mongoose.Types.ObjectId[] | string[];
+	units: mongoose.Types.ObjectId[] | Unit[];
 
-	@Prop({ required: false, default: [] })
-	incomePerMonth: [];
+	@Prop({
+		required: true,
+		unique: false,
+		ref: 'Company',
+		type: mongoose.Schema.Types.ObjectId,
+	})
+	company: Company;
 
-	@Prop({ required: false, default: [] })
-	expensePerMonth: [];
 
 	@Prop({ required: false, default: null })
 	imageUrl?: string;

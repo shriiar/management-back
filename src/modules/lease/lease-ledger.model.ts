@@ -6,6 +6,7 @@ import { Property } from '../property/property.model';
 import { Unit } from '../unit/unit.model';
 import { Rent } from './lease-rent.model';
 import { Lease } from './lease.model';
+import { Income } from '../income/income.model';
 
 export type LedgerDocument = Ledger & Document;
 
@@ -38,6 +39,13 @@ export class Ledger {
 
 	@Prop({ type: String, default: '' })
 	paymentMethod: string;
+
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Income' }],
+		required: false,
+		default: [],
+	})
+	incomes: mongoose.Types.ObjectId[] | Income[];
 
 	@Prop({
 		required: true,

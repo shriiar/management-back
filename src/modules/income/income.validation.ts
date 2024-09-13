@@ -1,8 +1,8 @@
 import { ApiProperty } from "@nestjs/swagger"
 import { IsBoolean, IsDefined, IsEnum, IsMongoId, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from "class-validator"
 
-export class AddExpenseDto {
-	@ApiProperty({ example: '2023-05-13' })
+export class AddIncomeDto {
+	@ApiProperty({ example: '2024-05-11' })
 	@IsString()
 	@IsNotEmpty()
 	date: string;
@@ -23,25 +23,23 @@ export class AddExpenseDto {
 	@IsOptional()
 	note: string;
 
-	@ApiProperty({ example: true })
-	@IsBoolean()
-	@IsNotEmpty()
-	isPaid: boolean;
+	@ApiProperty({ example: '4444333322221111' })
+	@IsNotEmpty({ message: 'CardNumber is required' })
+	@IsString()
+	cardNumber: string
 
-	@ApiProperty({
-		example: 'property',
-		required: true,
-		enum: ['property', 'unit'],
-		enumName: 'addTo',
-		description: 'Where to add the expense'
-	})
-	@IsNotEmpty({ message: 'AddTo is required' })
-	@IsString({ message: 'AddTo must be a string' })
-	@IsEnum(['property', 'unit'], { message: 'AddTo must be either property or unit' })
-	addTo: 'property' | 'unit';
+	@ApiProperty({ example: '1030' })
+	@IsString()
+	@IsNotEmpty()
+	exp: string
+
+	@ApiProperty({ example: '501' })
+	@IsString()
+	@IsNotEmpty()
+	cvv: string
 
 	@ApiProperty({ example: '64cbc171f5212ee891018701' })
-	@IsNotEmpty({ message: 'AddToId is required' })
-	@IsMongoId({ message: 'AddToId must be a mongoDB ID' })
-	addToId: string;
+	@IsNotEmpty({ message: 'Lease is required' })
+	@IsMongoId({ message: 'Lease must be a mongoDB ID' })
+	lease: string;
 }

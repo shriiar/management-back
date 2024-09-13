@@ -4,8 +4,29 @@ import { User } from '../users/users.model';
 import { Company } from '../company/company.model';
 import { Unit } from '../unit/unit.model';
 import { Property } from '../property/property.model';
+import { Ledger } from '../lease/lease-ledger.model';
+import { Lease } from '../lease/lease.model';
 
-export type ExpenseDocument = Expense & Document;
+export type IncomeDocument = Income & Document;
+
+@Schema({ timestamps: false, _id: false })
+class Cardknox {
+	@Prop({ type: String, default: '' })
+	RefNum: string;
+
+	@Prop({ type: String, default: '' })
+	Result: string;
+
+	@Prop({ type: String, default: '' })
+	GatewayRefNum: string;
+
+	@Prop({ type: String, default: '' })
+	GatewayStatus: string;
+
+	@Prop({ type: String, default: '' })
+	GatewayErrorMessage: string;
+}
+const CardknoxSchema = SchemaFactory.createForClass(Cardknox);
 
 @Schema({ timestamps: false, _id: false })
 class Receipt {
@@ -24,9 +45,9 @@ class Receipt {
 const ReceiptSchema = SchemaFactory.createForClass(Receipt);
 
 @Schema({ timestamps: true, autoIndex: true })
-export class Expense {
+export class Income {
 
-	_id: Expense | mongoose.Types.ObjectId;
+	_id: Income | mongoose.Types.ObjectId;
 
 	@Prop({ type: Number, required: true })
 	month: number;
@@ -43,8 +64,17 @@ export class Expense {
 	@Prop({ type: String, default: '' })
 	note: string;
 
-	@Prop({ required: false, default: false })
-	isPaid: boolean;
+	@Prop({ type: [ReceiptSchema], default: [] })
+	receipt: Receipt[];
+
+	@Prop({
+		type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Ledger' }],
+		required: true,
+	})
+	ledgers: mongoose.Types.ObjectId[] | Ledger[];
+
+	@Prop({ type: CardknoxSchema, required: true })
+	cardknox: Cardknox;
 
 	@Prop({
 		required: true,
@@ -54,24 +84,16 @@ export class Expense {
 	})
 	addedBy: User;
 
-	@Prop({ type: Boolean, default: false })
-	isApproved: boolean;
-
 	@Prop({
-		required: false,
-		default: null,
+		required: true,
 		unique: false,
-		ref: 'User',
+		ref: 'Lease',
 		type: mongoose.Schema.Types.ObjectId,
 	})
-	approvedBy: User;
-
-	@Prop({ type: [ReceiptSchema], default: [] })
-	receipt: Receipt[];
+	lease: Lease;
 
 	@Prop({
-		required: false,
-		default: null,
+		required: true,
 		unique: false,
 		ref: 'Unit',
 		type: mongoose.Schema.Types.ObjectId,
@@ -79,8 +101,7 @@ export class Expense {
 	unit: Unit;
 
 	@Prop({
-		required: false,
-		default: null,
+		required: true,
 		unique: false,
 		ref: 'Property',
 		type: mongoose.Schema.Types.ObjectId,
@@ -99,4 +120,4 @@ export class Expense {
 	updatedAt: Date;
 }
 
-export const ExpenseSchema = SchemaFactory.createForClass(Expense);
+export const IncomeSchema = SchemaFactory.createForClass(Income);

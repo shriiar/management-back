@@ -18,6 +18,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CronModule } from './modules/cron/cron.module';
 import { CronLeaseService } from './modules/cron/services/cron-lease.service';
 import { ExpenseModule } from './modules/expense/expense.module';
+import { PaymentModule } from './modules/payment/payment.module';
+import { IncomeModule } from './modules/income/income.module';
 
 @Module({
 	imports: [
@@ -38,6 +40,8 @@ import { ExpenseModule } from './modules/expense/expense.module';
 		LeaseModule,
 		CronModule,
 		ExpenseModule,
+		PaymentModule,
+		IncomeModule,
 	],
 	controllers: [],
 	providers: [Logger],

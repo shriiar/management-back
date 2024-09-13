@@ -62,24 +62,30 @@ export class CompanyService {
 				throw new BadRequestException('Company or user email already in use');
 			}
 
+			const newUserId = new mongoose.Types.ObjectId();
+			const newCompanyId = new mongoose.Types.ObjectId();
+
 			// Adding user to userModel
 			const newUser = new this.userModel({
+				_id: newUserId,
 				name: user.name,
 				email: user.email,
 				password: user.password,
 				role: USER_ROLE.admin,
+				company: newCompanyId
 			});
 			const savedUser: any = await newUser.save({ session });
 
 			// Now add company & associate user (admin) to the company
 			const newCompany = new this.companyModel({
+				_id: newCompanyId,
 				name: payload.name,
 				email: payload.email,
 				address: payload.address,
 				allowedUnits: payload.allowedUnits,
 				imageUrl: payload.imageUrl,
-				admin: savedUser._id,
-				users: [savedUser._id],
+				admin: newUserId,
+				users: [newUserId],
 			});
 			const savedCompany = await newCompany.save({ session });
 

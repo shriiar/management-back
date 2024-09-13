@@ -46,8 +46,7 @@ export class User {
 	role: string;
 
 	@Prop({
-		required: false,
-		default: null,
+		required: true,
 		unique: false,
 		ref: 'Company',
 		type: mongoose.Schema.Types.ObjectId,

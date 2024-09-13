@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { AddExpenseDto } from './expense.validation';
-import { IFullUser } from '../users/users.interface';
-import { Property } from '../property/property.model';
-import { Unit } from '../unit/unit.model';
+import { AddExpenseDto } from '../expense.validation';
+import { IFullUser } from '../../users/users.interface';
+import { Property } from '../../property/property.model';
+import { Unit } from '../../unit/unit.model';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model } from 'mongoose';
-import { Expense } from './expense.model';
+import { Expense } from '../expense.model';
 import * as moment from 'moment-timezone'
 import { isValidDate } from 'src/utils/dateHandler';
 import { DEFAULT_TIMEZONE } from 'src/common/config/timezone.config';
@@ -189,20 +189,20 @@ export class ExpenseService {
 	// add expense for property & unit
 	async addExpense(payload: AddExpenseDto, user: IFullUser) {
 
-		const { date, description, amount, notes, isPaid, addTo, addToId } = payload;
+		const { date, description, amount, note, isPaid, addTo, addToId } = payload;
 
 		// validate given date
 		if (!isValidDate(date)) {
 			throw new BadRequestException('Invalid date. The date format should be YYYY-MM-DD');
 		}
 
-		const monthYear = moment.tz(date, DEFAULT_TIMEZONE);
-
 		// Start a session
 		const session = await this.connection.startSession();
 		try {
 			// start transaction
 			session.startTransaction();
+
+			const monthYear = moment.tz(date, DEFAULT_TIMEZONE);
 
 			const model = addTo === 'property' ? this.propertyModel : this.unitModel;
 			const field = addTo === 'property' ? 'property' : 'unit';
@@ -229,6 +229,7 @@ export class ExpenseService {
 				year: monthYear.year(),
 				amount: amount,
 				description: description,
+				note: note,
 				addedBy: user?._id,
 				[field]: new mongoose.Types.ObjectId(addToId), // Set the correct field (property or unit)
 				[otherField]: null, // Set the other field to null
