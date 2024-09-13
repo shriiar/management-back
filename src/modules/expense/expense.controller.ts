@@ -27,7 +27,7 @@ export class ExpenseController {
 	@ApiQuery({ name: 'year', required: false })
 	@ApiQuery({ name: 'sortBy', required: false })
 	@ApiQuery({ name: 'sortOrder', required: false })
-	async getLeases(
+	async getPartialExpenses(
 		@Query('page') page: number,
 		@Query('limit') limit: number,
 		@Query('id') id: string,

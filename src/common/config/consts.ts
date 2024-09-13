@@ -7,6 +7,8 @@ export const COLLECTIONS = {
 	leases: 'leases',
 	rents: 'rents',
 	ledgers: 'ledgers',
+	expenses: 'expenses',
+	incomes: 'incomes',
 }
 
 export const REFERENCE = {
@@ -23,5 +25,9 @@ export const REFERENCE = {
 	user: 'user',
 	tenant: 'tenant',
 	addedBy: 'addedBy',
-	approvedBy: 'approvedBy'
+	approvedBy: 'approvedBy',
+	expenses: 'expenses',
+	incomes: 'incomes',
+	incomePerMonth: 'incomePerMonth',
+	expensePerMonth: 'expensePerMonth'
 }

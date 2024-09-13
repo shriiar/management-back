@@ -30,6 +30,180 @@ export class IncomeService {
 		private readonly paymentService: PaymentService
 	) { }
 
+	public async getPartialIncomes(page: number, limit: number, filter: IGetIncome, user: IFullUser) {
+
+		page = page || 1;
+		limit = limit || 10;
+		const skip = (page - 1) * limit;
+
+		const { name, email, unitId, propertyId, month, year, sortBy, sortOrder } = filter;
+
+		const searchCond: any[] = [];
+		const aggregatedSearchCond: any[] = [];
+
+		if (unitId) {
+			searchCond.push({
+				unit: new mongoose.Types.ObjectId(unitId)
+			});
+		}
+		if (propertyId) {
+			searchCond.push({
+				property: new mongoose.Types.ObjectId(propertyId)
+			});
+		}
+		if (month) {
+			searchCond.push({ month: { $eq: month } });
+		}
+		if (year) {
+			searchCond.push({ year: { $eq: year } });
+		}
+
+		// aggregated search
+		if (name) {
+			aggregatedSearchCond.push({ "addedBy.name": { $regex: name, $options: 'i' } });
+		}
+		if (email) {
+			aggregatedSearchCond.push({ "addedBy.email": { $regex: email, $options: 'i' } });
+		}
+
+		const matchStage = {
+			$match: {
+				...(searchCond.length && { $and: searchCond }),
+				company: new mongoose.Types.ObjectId(user?.company)
+			}
+		};
+
+		const aggregatedMatchStage = {
+			$match: {
+				...(aggregatedSearchCond.length && { $and: aggregatedSearchCond }),
+				company: new mongoose.Types.ObjectId(user?.company)
+			}
+		};
+
+		const lookupStage = [
+
+			// get associated ledgers that was paid by each income
+			{
+				$lookup: {
+					from: COLLECTIONS.ledgers,
+					localField: REFERENCE.ledgers,
+					foreignField: "_id",
+					as: "ledgers"
+				}
+			},
+
+			// get who added the income
+			{
+				$lookup: {
+					from: COLLECTIONS.users,
+					localField: REFERENCE.addedBy,
+					foreignField: "_id",
+					as: "addedBy"
+				}
+			},
+
+			// get associated property
+			{
+				$lookup: {
+					from: COLLECTIONS.properties,
+					localField: REFERENCE.property,
+					foreignField: "_id",
+					as: "property"
+				}
+			},
+
+			// get associated unit
+			{
+				$lookup: {
+					from: COLLECTIONS.units,
+					localField: REFERENCE.unit,
+					foreignField: "_id",
+					as: "unit"
+				}
+			},
+
+			// insert new fields
+			{
+				$addFields: {
+					addedBy: { $arrayElemAt: ["$addedBy", 0] },
+					property: { $arrayElemAt: ["$property", 0] },
+					unit: { $arrayElemAt: ["$unit", 0] },
+					ledgers: {
+						$map: {
+							input: "$ledgers",
+							as: "ledger",
+							in: {
+								_id: "$$ledger._id",
+								paymentDay: "$$ledger.paymentDay",
+								description: "$$ledger.description",
+								frequency: "$$ledger.frequency",
+								isPaid: "$$ledger.isPaid",
+								amount: "$$ledger.amount",
+								balance: "$$ledger.balance",
+							}
+						}
+					}
+				}
+			}
+		];
+
+		const pipeline: any = [
+			matchStage,
+			...lookupStage,
+
+			aggregatedMatchStage,
+
+			{ $sort: sortBy ? { [sortBy]: sortOrder } : { _id: -1 } },
+			{ $skip: skip },
+			{ $limit: limit },
+			{
+				$project: {
+					_id: 1,
+					month: 1,
+					year: 1,
+					paymentDay: 1,
+					isPaid: 1,
+					cardknox: 1,
+
+					// aggregated fields with _id checks
+					ledgers: 1,
+					addedBy: {
+						_id: "$addedBy._id",
+						name: "$addedBy.name",
+						email: "$addedBy.email"
+					},
+					property: {
+						_id: "$property._id",
+						address: "$property.address"
+					},
+					unit: {
+						_id: "$unit._id",
+						unitNumber: "$unit.unitNumber",
+						isOccupied: "$unit.isOccupied"
+					}
+				}
+			},
+			{
+				$facet: {
+					data: [
+						{ $sort: { _id: -1 } },
+						{ $skip: skip },
+						{ $limit: limit }
+					],
+					total: [
+						{ $count: "total" }
+					]
+				}
+			}
+		];
+
+		const res = await this.incomeModel.aggregate(pipeline).exec();
+		return {
+			data: res[0]?.data || [],
+			total: res[0]?.total[0]?.total || 0
+		};
+	}
+
 	// a payment for each ledger
 	async addIncome(payload: AddIncomeDto, user: IFullUser): Promise<IncomeDocument> {
 
@@ -215,7 +389,7 @@ export class IncomeService {
 				lease: new mongoose.Types.ObjectId(lease),
 				unit: res?.unit?._id,
 				property: res?.property?._id,
-				company: user?._id
+				company: user?.company
 			})
 			const savedData = await newIncome.save({ session });
 
@@ -250,4 +424,15 @@ export class IncomeService {
 			throw error;
 		}
 	}
+}
+
+interface IGetIncome {
+	month: number;
+	year: number;
+	name: string;
+	email: string;
+	unitId: string;
+	propertyId: string;
+	sortBy: string;
+	sortOrder: number;
 }

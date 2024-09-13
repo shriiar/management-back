@@ -27,7 +27,7 @@ export class ExpenseService {
 		limit = limit || 10;
 		const skip = (page - 1) * limit;
 
-		const { id, month, year } = filter;
+		const { id, month, year, sortBy, sortOrder } = filter;
 
 		const searchCond: any[] = [];
 
@@ -109,7 +109,7 @@ export class ExpenseService {
 		const pipeline: any = [
 			matchStage,
 			...lookupStage,
-			{ $sort: filter?.sortBy ? { [filter?.sortBy]: filter?.sortOrder } : { _id: -1 } },
+			{ $sort: sortBy ? { [sortBy]: sortOrder } : { _id: -1 } },
 			{ $skip: skip },
 			{ $limit: limit },
 			{

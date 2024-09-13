@@ -58,6 +58,7 @@ export class LeaseService {
 		}
 
 		const searchCond: any[] = [];
+		const aggregatedSearchCond: any[] = [];
 
 		if (fromStart && toStart) {
 			searchCond.push({ leaseStart: { $gte: fromStart, $lte: toStart } });
@@ -71,11 +72,13 @@ export class LeaseService {
 		if (unitId) {
 			searchCond.push({ unitId: new mongoose.Types.ObjectId(unitId) });
 		}
+
+		// aggregated search
 		if (name) {
-			searchCond.push({ "user.name": { $regex: name, $options: 'i' } });
+			aggregatedSearchCond.push({ "tenant.name": { $regex: name, $options: 'i' } });
 		}
 		if (email) {
-			searchCond.push({ "user.email": { $regex: email, $options: 'i' } });
+			aggregatedSearchCond.push({ "tenant.email": { $regex: email, $options: 'i' } });
 		}
 
 		const matchStage = {
@@ -83,6 +86,13 @@ export class LeaseService {
 				...(searchCond.length && { $and: searchCond }),
 				company: new mongoose.Types.ObjectId(user?.company),
 				isFutureLease: isFutureLease || false,
+			}
+		};
+
+		const aggregatedMatchStage = {
+			$match: {
+				...(aggregatedSearchCond.length && { $and: aggregatedSearchCond }),
+				company: new mongoose.Types.ObjectId(user?.company)
 			}
 		};
 
@@ -165,6 +175,7 @@ export class LeaseService {
 		const pipeline: any = [
 			matchStage,
 			...lookupStage,
+			aggregatedMatchStage,
 			{ $sort: filter?.sortBy ? { [filter?.sortBy]: filter?.sortOrder } : { _id: -1 } },
 			{ $skip: skip },
 			{ $limit: limit },
