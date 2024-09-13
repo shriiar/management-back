@@ -79,7 +79,8 @@ export class Lease {
 	} | null;
 
 	@Prop({
-		required: true,
+		required: false,
+		default: null,
 		ref: 'User',
 		type: mongoose.Schema.Types.ObjectId,
 	})
