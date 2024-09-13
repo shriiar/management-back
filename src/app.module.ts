@@ -20,6 +20,7 @@ import { CronLeaseService } from './modules/cron/services/cron-lease.service';
 import { ExpenseModule } from './modules/expense/expense.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { IncomeModule } from './modules/income/income.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
 	imports: [
@@ -42,6 +43,7 @@ import { IncomeModule } from './modules/income/income.module';
 		ExpenseModule,
 		PaymentModule,
 		IncomeModule,
+		ReportsModule,
 	],
 	controllers: [],
 	providers: [Logger],
