@@ -48,7 +48,7 @@ export class LeaseService {
 
 		const todayDate = moment().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
 
-		let { propertyId, unitId, name, email, isFutureLease, fromStart, toStart, fromEnd, toEnd } = filter;
+		let { propertyId, unitId, name, email, isFutureLease, fromStart, toStart, fromEnd, toEnd, sortBy, sortOrder } = filter;
 
 		if (fromStart && !toStart) {
 			toStart = todayDate;
@@ -176,7 +176,7 @@ export class LeaseService {
 			matchStage,
 			...lookupStage,
 			aggregatedMatchStage,
-			{ $sort: filter?.sortBy ? { [filter?.sortBy]: filter?.sortOrder } : { _id: -1 } },
+			{ $sort: sortBy ? { [sortBy]: sortOrder } : { _id: -1 } },
 			{ $skip: skip },
 			{ $limit: limit },
 			{

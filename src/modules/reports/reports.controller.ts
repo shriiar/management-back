@@ -20,7 +20,7 @@ export class ReportsController {
 
 	@Get('vacancy')
 	@UseGuards(RolesGuard)
-	@Roles(USER_ROLE.manager, USER_ROLE.accountant)
+	@Roles(USER_ROLE.accountant)
 	@ApiQuery({ name: 'propertyId', required: false })
 	async getVacancyReport(
 		@Query('propertyId') propertyId: string,
@@ -28,10 +28,27 @@ export class ReportsController {
 		@CurrentUser() user: IFullUser
 	) {
 
-		const res = await this.reportsService.getVacancyReport_v2({
+		const res = await this.reportsService.getVacancyReport({
 			propertyId, isOccupied
 		}, user)
 		return res
 
+	}
+
+	@Get('rent')
+	@UseGuards(RolesGuard)
+	@Roles(USER_ROLE.accountant)
+	@ApiQuery({ name: 'propertyId', required: false })
+	@ApiQuery({ name: 'from', required: false })
+	@ApiQuery({ name: 'to', required: false })
+	async getRentRollV3(
+		@Query('propertyId') propertyId: string,
+		@Query('from') from: string,
+		@Query('to') to: string,
+		@CurrentUser() user: IFullUser,
+	) {
+		const filter = { propertyId, from, to };
+
+		return await this.reportsService.getRentReport(filter, user)
 	}
 }

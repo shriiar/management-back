@@ -21,7 +21,7 @@ export class ExpenseController {
 
 	@Get('get-partial-expenses')
 	@UseGuards(RolesGuard)
-	@Roles(USER_ROLE.manager)
+	@Roles(USER_ROLE.accountant)
 	@ApiQuery({ name: 'id', required: false })
 	@ApiQuery({ name: 'month', required: false })
 	@ApiQuery({ name: 'year', required: false })
@@ -46,7 +46,7 @@ export class ExpenseController {
 	@ApiBody({ type: () => AddExpenseDto })
 	@Post('add-expense')
 	@UseGuards(RolesGuard)
-	@Roles(USER_ROLE.manager, USER_ROLE.accountant)
+	@Roles(USER_ROLE.accountant)
 	async addExpense(
 		@Body() body: AddExpenseDto,
 		@CurrentUser() user: IFullUser

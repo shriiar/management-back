@@ -21,7 +21,7 @@ export class IncomeController {
 
 	@Get('get-partial-incomes')
 	@UseGuards(RolesGuard)
-	@Roles(USER_ROLE.manager)
+	@Roles(USER_ROLE.accountant)
 	@ApiQuery({ name: 'name', required: false })
 	@ApiQuery({ name: 'email', required: false })
 	@ApiQuery({ name: 'unitId', required: false })

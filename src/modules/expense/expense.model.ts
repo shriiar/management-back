@@ -37,6 +37,9 @@ export class Expense {
 	@Prop({ type: String, required: true })
 	paymentDay: string;
 
+	@Prop({ type: Number, required: true })
+	amount: number;
+
 	@Prop({ type: String, required: true })
 	description: string;
 

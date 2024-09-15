@@ -380,6 +380,7 @@ export class IncomeService {
 				_id: newIncomeId,
 				month: monthYear.month() + 1,
 				year: monthYear.year(),
+				amount: amount,
 				paymentDay: date,
 				description: description,
 				note: note,
