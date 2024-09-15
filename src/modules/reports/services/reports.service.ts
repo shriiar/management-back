@@ -38,399 +38,6 @@ export class ReportsService {
 		const date30DaysAgo = moment.tz(DEFAULT_TIMEZONE).subtract(30, 'days').format('YYYY-MM-DD');
 		const date60DaysForward = moment.tz(DEFAULT_TIMEZONE).add(60, 'days').format('YYYY-MM-DD');
 
-		// for future leases
-		const futureLeaseLookup = [
-
-			// future tenant calculation
-			{
-				$lookup: {
-					from: COLLECTIONS.leases,
-					localField: "units.futureLeases",
-					foreignField: "_id",
-					as: "futureLeases"
-				}
-			},
-			{
-				$unwind: {
-					path: "$futureLeases",
-					preserveNullAndEmptyArrays: true
-				}
-			},
-			{ $sort: { "futureLeases.leaseStart": 1 } },
-
-			// future tenant info
-			{
-				$lookup: {
-					from: COLLECTIONS.users,
-					localField: "futureLeases.tenant",
-					foreignField: "_id",
-					as: "futureTenants"
-				}
-			},
-			{
-				$unwind: {
-					path: "$futureTenants",
-					preserveNullAndEmptyArrays: true
-				}
-			},
-		];
-
-		const futureLeaseStage = {
-			// future lease and tenant
-			futureTenant: {
-				$cond: {
-					if: { $ne: ["$futureLeases", null] },
-					then: {
-						_id: { $toString: "$futureLeases._id" },
-						leaseStart: "$futureLeases.leaseStart",
-						leaseEnd: "$futureLeases.leaseEnd",
-						tenant: {
-							_id: { $toString: "$futureTenants._id" },
-							name: "$futureTenants.name",
-							email: "$futureTenants.email"
-						},
-					},
-					else: null
-				}
-			}
-		}
-
-		// for active leases
-		const activeLeaseLookup = [
-
-			// active lease info
-			{
-				$lookup: {
-					from: COLLECTIONS.leases,
-					localField: "units.lease",
-					foreignField: "_id",
-					as: "activeLease"
-				}
-			},
-			{
-				$unwind: {
-					path: "$activeLease",
-					preserveNullAndEmptyArrays: true
-				}
-			},
-
-			// active tenant info
-			{
-				$lookup: {
-					from: COLLECTIONS.users,
-					localField: "activeLease.tenant",
-					foreignField: "_id",
-					as: "activeTenant"
-				}
-			},
-			{
-				$unwind: {
-					path: "$activeTenant",
-					preserveNullAndEmptyArrays: true
-				}
-			}
-		];
-
-		const activeLeaseStage = {
-			// active lease and tenant
-			activeLease: {
-				$cond: {
-					if: { $ne: ["$activeLease", null] },
-					then: {
-						_id: { $toString: "$activeLease._id" },
-						leaseStart: "$activeLease.leaseStart",
-						leaseEnd: "$activeLease.leaseEnd",
-						tenant: {
-							_id: { $toString: "$activeTenant._id" },
-							name: "$activeTenant.name",
-							email: "$activeTenant.email"
-						},
-					},
-					else: null
-				}
-			}
-		}
-
-		// expiring lease calculation for each property
-		// lease start > 30 days ago and lease end < 60 days forward
-		const moveOutPipeLine = [
-			{
-				$lookup: {
-					from: COLLECTIONS.leases,
-					localField: "_id",
-					foreignField: REFERENCE.property,
-					as: "leases"
-				}
-			},
-			{
-				$addFields: {
-					expiringLeaseCount: {
-						$cond: {
-							if: { $eq: [{ $size: "$leases" }, 0] },
-							then: 0,
-							else: {
-								$size: {
-									$filter: {
-										input: "$leases",
-										as: "leases",
-										cond: {
-											$and: [
-												{ $gte: ["$$leases.leaseEnd", date30DaysAgo] },
-												{ $lte: ["$$leases.leaseEnd", date60DaysForward] },
-												{ $eq: ["$$leases.isFutureLease", false] },
-												{ $eq: ["$$leases.isClosed", false] },
-											],
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-		]
-
-		const pipeLine: any = [
-			{
-				$match: {
-					company: new mongoose.Types.ObjectId(user?.company),
-					...(propertyId && { _id: new mongoose.Types.ObjectId(propertyId) })
-				}
-			},
-
-			// Move out calculation for each property
-			...moveOutPipeLine,
-
-			// units lookup
-			{
-				$lookup: {
-					from: COLLECTIONS.units,
-					localField: "_id",
-					foreignField: REFERENCE.property,
-					as: "units"
-				}
-			},
-			{
-				$unwind: {
-					path: "$units",
-					preserveNullAndEmptyArrays: true
-				}
-			},
-			{
-				$match: {
-					"units.isOccupied": isOccupied
-				}
-			},
-
-			// turn over calculation
-			{
-				$addFields: {
-					pastLeaseId: {
-						$arrayElemAt: ["$units.leaseHistories", -1]
-					}
-				}
-			},
-
-			// date vacated calculation
-			{
-				$lookup: {
-					from: COLLECTIONS.leases,
-					localField: "pastLeaseId",
-					foreignField: "_id",
-					as: "pastLease"
-				}
-			},
-			{
-				$addFields: {
-					dateVacated: {
-						$cond: {
-							if: { $ne: ["$pastLease", []] },
-							then: {
-								leaseStart: { $arrayElemAt: ["$pastLease.leaseStart", 0] },
-								leaseEnd: { $arrayElemAt: ["$pastLease.leaseEnd", 0] }
-							},
-							else: null
-						}
-					}
-				}
-			},
-
-			// based on the isOccupied value, we will add the stages, either active tenant or future tenant
-			...(isOccupied ? activeLeaseLookup : futureLeaseLookup),
-
-			// group stage for unit 
-			{
-				$group: {
-					_id: {
-						propertyId: { $toString: "$_id" },
-						address: "$address",
-					},
-					expiringLeaseCount: { $first: "$expiringLeaseCount" },
-					units: {
-						$push: {
-							_id: { $toString: "$units._id" },
-							unitNumber: "$units.unitNumber",
-							squareFeet: "$units.squareFeet",
-							marketRent: "$units.marketRent",
-							turnOver: "$turnOver",
-							dateVacated: "$dateVacated",
-
-							// either active tenant or future tenant
-							...(isOccupied ? activeLeaseStage : futureLeaseStage)
-						},
-					},
-				}
-			},
-
-			// group stage for property
-			{
-				$group: {
-					_id: null,
-					properties: {
-						$push: {
-							propertyId: { $toString: "$_id.propertyId" },
-							address: "$_id.address",
-							units: "$units",
-							expiringLeaseCount: "$expiringLeaseCount",
-						}
-					}
-				}
-			},
-
-			// project stage
-			{
-				$project: {
-					_id: 0,
-					properties: 1,
-				}
-			}
-		]
-		const totalMoveOut_PipeLine = [
-			{
-				$match: {
-					company: new mongoose.Types.ObjectId(user?.company),
-					...(propertyId && { _id: new mongoose.Types.ObjectId(propertyId) })
-				}
-			},
-			...moveOutPipeLine,
-			{
-				$group: {
-					_id: null,
-					totalMoveOutCount: {
-						$sum: "$expiringLeaseCount"
-					}
-				}
-			},
-			{
-				$project: {
-					_id: 0,
-					totalMoveOutCount: 1
-				}
-			}
-		]
-
-		const unitSummary_PipeLine = [
-			// unit summary pipeline
-			// this pipeline is used to get total occupied and vacant unit number
-			{
-				$match: {
-					companyId: new mongoose.Types.ObjectId(user?.company),
-					...(propertyId && { _id: new mongoose.Types.ObjectId(propertyId) })
-				}
-			},
-			{
-				$lookup: {
-					from: COLLECTIONS.units,
-					localField: "_id",
-					foreignField: REFERENCE.property,
-					as: "units"
-				}
-			},
-			{
-				$unwind: {
-					path: "$units",
-					preserveNullAndEmptyArrays: true
-				}
-			},
-			{
-				$group: {
-					_id: {
-						propertyId: { $toString: "$_id" },
-						address: "$address",
-					},
-					occupiedUnit: {
-						$sum: {
-							$cond: [{ $eq: ["$units.isOccupied", true] }, 1, 0]
-						}
-					},
-					vacantUnit: {
-						$sum: {
-							$cond: [{ $eq: ["$units.isOccupied", false] }, 1, 0]
-						}
-					}
-				}
-			},
-			{
-				$group: {
-					_id: null,
-					totalOccupied: { $sum: "$occupiedUnit" },
-					totalVacant: { $sum: "$vacantUnit" }
-				}
-			},
-			{
-				$project: {
-					_id: 0
-				}
-			}
-		]
-
-		const [[res], [totalMoveOut], [summary]]: any = await Promise.all([
-			await this.propertyModel.aggregate(pipeLine).exec(),
-			await this.propertyModel.aggregate(totalMoveOut_PipeLine).exec(),
-			await this.propertyModel.aggregate(unitSummary_PipeLine).exec()
-		])
-
-		const properties = [];
-
-		for (const property of res?.properties) {
-
-			const units = [];
-			for (const unit of property?.units) {
-
-				// if unit exist in units array, then continue
-				const unitExists = units.some(data => data?._id === unit?._id);
-				if (unitExists) continue;
-
-				units.push(unit);
-			}
-
-			properties.push({
-				propertyId: property?.propertyId,
-				address: property?.address,
-				expiringLeaseCount: property?.expiringLeaseCount,
-				units: units,
-			})
-		}
-
-		return {
-			properties: properties || [],
-			totalMoveOutCount: totalMoveOut?.totalMoveOutCount || 0,
-			totalOccupied: summary?.totalOccupied || 0,
-			totalVacant: summary?.totalVacant || 0,
-			totaUnit: summary?.totalOccupied + summary?.totalVacant || 0
-		}
-	}
-
-	async getVacancyReport_v2(payload: {
-		propertyId: string,
-		isOccupied: boolean
-	}, user: IFullUser) {
-
-		const { isOccupied, propertyId } = payload;
-
-		const date30DaysAgo = moment.tz(DEFAULT_TIMEZONE).subtract(30, 'days').format('YYYY-MM-DD');
-		const date60DaysForward = moment.tz(DEFAULT_TIMEZONE).add(60, 'days').format('YYYY-MM-DD');
-
 		// Combined Lookup for both Active and Future Leases
 		const leaseLookupStage = [
 			{
@@ -533,9 +140,7 @@ export class ReportsService {
 				}
 			},
 			{ $unwind: { path: "$unitData", preserveNullAndEmptyArrays: true } },
-			{
-				$match: { "unitData.isOccupied": isOccupied }
-			},
+			{ $match: { "unitData.isOccupied": isOccupied } },
 
 			// Lease and Tenant Lookup Stages (combined once)
 			...leaseLookupStage,
@@ -544,22 +149,18 @@ export class ReportsService {
 			// Move Out Pipeline
 			...moveOutPipeline,
 
-			// Group by Property and Units
+			// // Group by Property and Units
 			{
 				$group: {
 					_id: { propertyId: { $toString: "$_id" }, address: "$address" },
 					expiringLeaseCount: { $first: "$expiringLeaseCount" },
-					occupiedUnits: {
-						$sum: {
-							$cond: [{ $eq: ["$unitData.isOccupied", true] }, 1, 0]
-						}
-					},
+					occupiedUnits: { $first: "$occupiedUnits" },
+					unitsCount: { $sum: { $size: "$units" } },
 					vacantUnits: {
 						$sum: {
 							$cond: [{ $eq: ["$unitData.isOccupied", false] }, 1, 0]
 						}
 					},
-					unitsCount: { $sum: { $size: "$units" } },
 					units: {
 						$push: {
 							_id: { $toString: "$unitData._id" },
@@ -579,7 +180,7 @@ export class ReportsService {
 				}
 			},
 
-			// Group by Overall Properties
+			// // Group by Overall Properties
 			{
 				$group: {
 					_id: null,
@@ -601,7 +202,7 @@ export class ReportsService {
 				}
 			},
 
-			// Project to Remove _id
+			// // Project to Remove _id
 			{
 				$project: {
 					_id: 0,
@@ -615,8 +216,6 @@ export class ReportsService {
 		];
 
 		const [res]: any = await this.propertyModel.aggregate(pipeLine).exec();
-		console.log(res);
-		// return res
 		let totalOccupied = 0, totalVacant = 0;
 
 		const properties = res?.properties.map((property) => {
@@ -650,5 +249,322 @@ export class ReportsService {
 			totalUnits: res?.totalUnits || 0,
 		};
 
+	}
+
+	async getRentReport(filter: {
+		propertyId: string
+		from: string
+		to: string
+	}, user: IFullUser) {
+
+		const { propertyId, from, to } = filter;
+
+		let fromDate = from;
+		let toDate = to;
+
+		const pipeLine = [
+			{
+				$match: {
+					company: new mongoose.Types.ObjectId(user?.company),
+					// status: { $ne: "pending" }, // Exclude pending leases
+					// isFutureLease: false,
+					...(propertyId && { property: new mongoose.Types.ObjectId(propertyId) }),
+				}
+			},
+
+			// Property lookup
+			{
+				$lookup: {
+					from: COLLECTIONS.properties,
+					localField: REFERENCE.property,
+					foreignField: "_id",
+					as: "property"
+				}
+			},
+			{
+				$unwind: {
+					path: "$property",
+					preserveNullAndEmptyArrays: true
+				}
+			},
+
+			// Unit lookup
+			{
+				$lookup: {
+					from: COLLECTIONS.units,
+					localField: REFERENCE.unit,
+					foreignField: "_id",
+					as: "unit"
+				}
+			},
+			{
+				$unwind: {
+					path: "$unit",
+					preserveNullAndEmptyArrays: true
+				}
+			},
+
+			// Active tenants' info lookup
+			{
+				$lookup: {
+					from: COLLECTIONS.users,
+					localField: REFERENCE.tenant,
+					foreignField: "_id",
+					as: "tenant"
+				}
+			},
+			{
+				$unwind: {
+					path: "$tenant",
+					preserveNullAndEmptyArrays: true
+				}
+			},
+
+			// Rent charges lookup
+			{
+				$lookup: {
+					from: COLLECTIONS.rents,
+					localField: REFERENCE.rents,
+					foreignField: "_id",
+					as: "rents"
+				}
+			},
+
+			// Ledger lookup
+			{
+				$lookup: {
+					from: COLLECTIONS.ledgers,
+					localField: REFERENCE.ledgers,
+					foreignField: "_id",
+					as: "ledgers"
+				}
+			},
+
+			// Incomes lookup with last payment information
+			{
+				$lookup: {
+					from: COLLECTIONS.incomes,
+					localField: "_id",
+					foreignField: REFERENCE.lease,
+					as: "incomes"
+				}
+			},
+			{
+				$addFields: {
+					lastPayment: {
+						$let: {
+							vars: {
+								filteredIncomes: { $ifNull: ["$incomes", []] },
+								maxPaymentDate: { $max: "$incomes.paymentDay" }
+							},
+							in: {
+								paymentDay: "$$maxPaymentDate",
+								totalAmount: {
+									$sum: {
+										$map: {
+											input: "$$filteredIncomes",
+											as: "income",
+											in: {
+												$cond: [
+													{ $eq: ["$$income.paymentDay", "$$maxPaymentDate"] },
+													"$$income.amount",
+													0
+												]
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+
+			// Add fields for ledger and rent calculation
+			{
+				$addFields: {
+					totalMonthly: {
+						$sum: {
+							$map: {
+								input: {
+									$filter: {
+										input: "$rents",
+										as: "rent",
+										cond: { $eq: ["$$rent.frequency", "monthly"] }
+									}
+								},
+								as: "rent",
+								in: "$$rent.amount"
+							}
+						}
+					},
+
+					// Filter and map ledger entries within the date range (if provided)
+					...((from && to) && {
+						ledgers: {
+							$map: {
+								input: {
+									$filter: {
+										input: "$ledgers",
+										as: "ledgerItem",
+										cond: {
+											$and: [
+												{ $gte: ["$$ledgerItem.paymentDay", fromDate] },
+												{ $lte: ["$$ledgerItem.paymentDay", toDate] }
+											]
+										}
+									}
+								},
+								as: "ledgerItem",
+								in: {
+									description: "$$ledgerItem.description",
+									amount: "$$ledgerItem.amount",
+									balance: "$$ledgerItem.balance",
+									paymentDay: "$$ledgerItem.paymentDay",
+									paymentDate: "$$ledgerItem.paymentDate"
+								}
+							}
+						}
+					})
+				}
+			},
+
+			// Summing amounts and balances
+			{
+				$addFields: {
+					totalAnnually: { $multiply: ["$totalMonthly", 12] },
+					totalAmount: {
+						$ifNull: [
+							{ $round: [{ $sum: "$ledgers.amount" }, 2] },
+							0
+						]
+					},
+					totalBalance: {
+						$ifNull: [
+							{ $round: [{ $sum: "$ledgers.balance" }, 2] },
+							0
+						]
+					}
+				}
+			},
+
+			// calculation for collected amount
+			{
+				$addFields: {
+					collectedAmount: {
+						$round: [
+							{ $subtract: ["$totalAmount", "$totalBalance"] }, 2
+						]
+					}
+				}
+			},
+
+			// Calculate net values
+			{
+				$addFields: {
+					netCollected: { $round: [{ $sum: "$collectedAmount" }, 2] },
+					netMonthly: { $round: [{ $sum: "$totalMonthly" }, 2] },
+					netAnnually: { $round: [{ $sum: "$totalAnnually" }, 2] },
+					netAmount: { $round: [{ $sum: "$totalAmount" }, 2] },
+					netBalance: { $round: [{ $sum: "$totalBalance" }, 2] }
+				}
+			},
+
+			// Group by unit and property
+			{
+				$group: {
+					_id: {
+						propertyId: "$property._id",
+						address: "$property.address",
+						unitId: "$unit._id",
+						unitNumber: "$unit.unitNumber",
+						occupied: "$unit.occupied"
+					},
+					netCollected: { $sum: "$netCollected" },
+					netMonthly: { $sum: "$netMonthly" },
+					netAnnually: { $sum: "$netAnnually" },
+					netAmount: { $sum: "$netAmount" },
+					netBalance: { $sum: "$netBalance" },
+					netIncome: { $sum: "$netIncome" },
+					lease: {
+						$push: {
+							_id: "$_id",
+							leaseStart: "$leaseStart",
+							leaseEnd: "$leaseEnd",
+							status: "$status",
+							isClosed: "$isClosed",
+							isEviction: "$isEviction",
+							isFutureLease: "$isFutureLease",
+
+							lastPayment: "$lastPayment",
+
+							collectedAmount: "$collectedAmount",
+							totalAmount: "$totalAmount",
+							totalBalance: "$totalBalance",
+							totalMonthly: "$totalMonthly",
+							totalAnnually: "$totalAnnually",
+
+							tenant: {
+								_id: "$tenant._id",
+								name: "$tenant.name",
+								email: "$tenant.email"
+							}
+						}
+					}
+				}
+			},
+
+			// Group by property
+			{
+				$group: {
+					_id: {
+						propertyId: "$_id.propertyId",
+						address: "$_id.address"
+					},
+					netCollected: { $sum: "$netCollected" },
+					netMonthly: { $sum: "$netMonthly" },
+					netAnnually: { $sum: "$netAnnually" },
+					netAmount: { $sum: "$netAmount" },
+					netBalance: { $sum: "$netBalance" },
+					units: {
+						$push: {
+							_id: "$_id.unitId",
+							unitNumber: "$_id.unitNumber",
+							occupied: "$_id.occupied",
+							lease: "$lease",
+						}
+					}
+				}
+			},
+
+			// Final grouping and summing all properties
+			{
+				$group: {
+					_id: null,
+					properties: {
+						$push: {
+							propertyId: "$_id.propertyId",
+							address: "$_id.address",
+							units: "$units"
+						}
+					},
+					netCollected: { $sum: "$netCollected" },
+					netMonthly: { $sum: "$netMonthly" },
+					netAnnually: { $sum: "$netAnnually" },
+					netAmount: { $sum: "$netAmount" },
+					netBalance: { $sum: "$netBalance" }
+				}
+			}
+		];
+
+		const [res] = await this.leaseModel.aggregate(pipeLine).exec();
+		return {
+			properties: res?.properties || [],
+			netCollected: res?.netCollected || 0,
+			netMonthly: res?.netMonthly || 0,
+			netAnnually: res?.netAnnually || 0,
+			netAmount: res?.netAmount || 0,
+			netBalance: res?.netBalance || 0
+		}
 	}
 }
